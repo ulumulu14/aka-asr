@@ -455,8 +455,8 @@ if __name__ == '__main__':
     
     #batch_size = 32
     batch_size = 4
-    train_manifest = "D:\\kod\\src\\asr_pytorch_local\\train_manifest_22k_plPL.jsonl"
-    val_manifest   = "D:\\kod\\src\\asr_pytorch_local\\val_manifest_plPL_test.jsonl"
+    train_manifest = "/content/datasets/cv-corpus-25.0-2026-03-09-pl/train.jsonl"
+    val_manifest   = "/content/datasets/cv-corpus-25.0-2026-03-09-pl/val.jsonl"
     #train_manifest = "train_mainfest_test.json"
     #val_manifest  =  "val_manifest_test.jsonl"
     root = Path("path/to/parent")
@@ -486,8 +486,8 @@ if __name__ == '__main__':
     tokenizer = CharTokenizer(alphabet="abcdefghijklmnoprstuwxyzqvąćęłńóśźż ")
 
     # 3) Datasety + loadery
-    train_ds = ASRDataset(train_manifest, tokenizer, augment=True, max_duration=2)
-    val_ds   = ASRDataset(val_manifest,   tokenizer, augment=False, max_duration=2)
+    train_ds = ASRDataset(train_manifest, tokenizer, augment=True, max_duration=14)
+    val_ds   = ASRDataset(val_manifest,   tokenizer, augment=False, max_duration=14)
     #train_ds.precompute_features("train_manifest_22k_plPL.jsonl", "features_cache/")
     collate  = make_collate_fn(blank_id=0)
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  collate_fn=collate)
