@@ -26,6 +26,8 @@ import librosa
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+import torchaudio
+from torchaudio import transforms
 
 
  
@@ -48,25 +50,39 @@ class AudioConfig:
 # Ekstrakcja cech
 
 def extract_logmel(wav_path: str | Path, cfg: AudioConfig = AudioConfig()) -> np.ndarray:
-    """wav -> log-mel spektrogram w shape (T, n_mels), float32."""
-    y, _ = librosa.load(str(wav_path), sr=cfg.sample_rate, mono=True)
+    #print(wav_path)
+    if type(wav_path) is str:
+        wav_path = Path(wav_path)
 
-    if cfg.preemphasis > 0:
-        # y[n] = x[n] - alpha * x[n-1]
-        y = np.append(y[0], y[1:] - cfg.preemphasis * y[:-1])
-
-    mel = librosa.feature.melspectrogram(
-        y=y, sr=cfg.sample_rate,
+    # torchaudio extraction on GPU
+    try:
+        waveform, sample_rate = torchaudio.load(wav_path, normalize=True)
+    except Exception as e:
+        print(f'problem z otworzeniem pliku {str(wav_path)}')
+        raise e
+        
+    mel_transform = transforms.MelSpectrogram(
+        sample_rate=cfg.sample_rate,
         n_fft=cfg.n_fft,
         hop_length=cfg.hop_length,
         win_length=cfg.win_length,
         n_mels=cfg.n_mels,
-        fmin=cfg.fmin,
-        fmax=cfg.fmax if cfg.fmax is not None else cfg.sample_rate / 2,
+        f_min=cfg.fmin,
+        f_max=cfg.fmax if cfg.fmax is not None else cfg.sample_rate / 2,
         power=2.0,
-    )                                       # (n_mels, T)
+        window_fn=torch.hann_window,
+        center=True,
+        pad_mode='reflect',
+        norm='slaney',         # <-- KLUCZOWE
+        mel_scale='slaney',
+    )
+    
+    mel = mel_transform(waveform)  # (channel, n_mels, time)
+    mel = mel.squeeze().cpu().numpy()
+
     log_mel = np.log(mel + cfg.log_eps)
     return log_mel.T.astype(np.float32)     # (T, n_mels)
+
 
 
 def cmvn(features: np.ndarray, eps: float = 1e-5) -> np.ndarray:

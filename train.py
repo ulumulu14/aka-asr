@@ -18,6 +18,7 @@ Zawiera:
 from __future__ import annotations
 from pathlib import Path
 
+import logging
 import math
 import json
 import os
@@ -28,6 +29,8 @@ import time
 import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
+from tqdm import tqdm
+from tqdm.contrib import tenumerate
 
 import numpy as np
 import pandas as pd
@@ -52,6 +55,8 @@ from preprocessing import (
 
 _DTYPES = {'fp32': torch.float32, 'fp16': torch.float16, 'bf16': torch.bfloat16}
 
+
+logging.basicConfig(filename='myapp.log', level=logging.INFO)
 
 # Config
 
@@ -187,6 +192,21 @@ def greedy_decode_batch(
 
     return all_hyps
 
+from torch.utils.data import Sampler
+import random
+
+class LengthBucketSampler(Sampler):
+    def __init__(self, durations, batch_size, n_buckets=20, shuffle=True):
+        self.bs = batch_size
+        self.shuffle = shuffle
+        idx_sorted = sorted(range(len(durations)), key=lambda i: durations[i])
+        self.batches = [idx_sorted[i:i+batch_size]
+                        for i in range(0, len(idx_sorted), batch_size)]
+    def __iter__(self):
+        b = self.batches[:]
+        if self.shuffle: random.shuffle(b)   # mieszamy batche, nie próbki w batchach
+        for batch in b: yield from batch
+    def __len__(self): return sum(len(b) for b in self.batches)
 
 
 # Eval (loss + WER)
@@ -205,7 +225,7 @@ def evaluate(
     refs: list[str] = []
     hyps: list[str] = []
 
-    for batch in loader:
+    for batch in tqdm(loader):
         audio  = batch['audio_features'].to(device)
         labels = batch['label_tokens'].to(device)
         targets = batch['targets'].to(device)
@@ -291,6 +311,8 @@ def train(
     if device.type == 'cuda':
         torch.cuda.manual_seed_all(cfg.seed)
 
+    logger = logging.getLogger(__name__)
+
     # --- Optimizer: weight decay tylko na "tlustych" parametrach ---
     decay, no_decay = [], []
     for n, p in model.named_parameters():
@@ -321,10 +343,11 @@ def train(
         t0_epoch = time.time()
         model.train()
         running_loss = 0.0
-        running_n    = 0
+        running_n = 0
         optimizer.zero_grad(set_to_none=True)
 
-        for batch_idx, batch in enumerate(train_loader):
+        #for batch_idx, batch in enumerate(tqdm(train_loader)):
+        for batch_idx, batch in (enumerate(pbar := tqdm(train_loader))):
             audio  = batch['audio_features'].to(device, non_blocking=True)
             labels = batch['label_tokens'].to(device, non_blocking=True)
             targets   = batch['targets'].to(device, non_blocking=True)
@@ -337,6 +360,13 @@ def train(
             loss = rnnt_loss(
                 logits.float(), targets, logit_lengths, target_lengths, blank=0,
             )
+
+            running_loss += loss.item() * audio.size(0)
+            running_n    += audio.size(0)
+            avg = running_loss / max(1, running_n)
+            lr = scheduler.get_last_lr()[0]
+
+            pbar.set_description(f"[epoch {epoch:3d} | step {global_step:7d}] | loss={avg:.4f}")
 
             if not torch.isfinite(loss):
                 # Skip step ale nie zerujemy stanu -- czesto efekt pojedynczego skoku
@@ -372,6 +402,7 @@ def train(
                     )
 
         # --- Eval ---
+        logger.info("Starting validation...")
         if (epoch + 1) % cfg.eval_every_epochs == 0:
             metrics = evaluate(model, val_loader, tokenizer, device,
                                max_symbols_per_step=cfg.max_symbols_per_step)
@@ -423,9 +454,9 @@ if __name__ == '__main__':
     #val_manifest   = tmp / "val_manifest.jsonl"
     
     #batch_size = 32
-    batch_size = 8
-    train_manifest = "train_manifest_22k_plPL.jsonl"
-    val_manifest   = "val_manifest_plPL_test.jsonl"
+    batch_size = 4
+    train_manifest = "D:\\kod\\src\\asr_pytorch_local\\train_manifest_22k_plPL.jsonl"
+    val_manifest   = "D:\\kod\\src\\asr_pytorch_local\\val_manifest_plPL_test.jsonl"
     #train_manifest = "train_mainfest_test.json"
     #val_manifest  =  "val_manifest_test.jsonl"
     root = Path("path/to/parent")
@@ -455,8 +486,8 @@ if __name__ == '__main__':
     tokenizer = CharTokenizer(alphabet="abcdefghijklmnoprstuwxyzqvąćęłńóśźż ")
 
     # 3) Datasety + loadery
-    train_ds = ASRDataset(train_manifest, tokenizer, augment=True)
-    val_ds   = ASRDataset(val_manifest,   tokenizer, augment=False)
+    train_ds = ASRDataset(train_manifest, tokenizer, augment=True, max_duration=2)
+    val_ds   = ASRDataset(val_manifest,   tokenizer, augment=False, max_duration=2)
     #train_ds.precompute_features("train_manifest_22k_plPL.jsonl", "features_cache/")
     collate  = make_collate_fn(blank_id=0)
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  collate_fn=collate)
@@ -509,9 +540,9 @@ if __name__ == '__main__':
     cfg = TrainConfig(
         peak_lr=1e-3, warmup_steps=15000,
         #max_epochs=100, batch_size=batch_size, num_workers=8, # big
-        max_epochs=2, batch_size=batch_size, num_workers=2, # smol
+        max_epochs=50, batch_size=batch_size, num_workers=2, # smol
         use_amp=True, amp_dtype='bf16',
-        log_every=50, eval_every_epochs=1,
+        log_every=1000000000, eval_every_epochs=1,
         ckpt_dir=f'checkpoints/conformer_m/experiment_{t}',
         max_symbols_per_step=3,
         weight_decay=1e-6, grad_clip=1.0,

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-DATA_LIMIT = 1000000
+DATA_LIMIT = 150000
 
 
 def require_command(command: str) -> None:
@@ -168,6 +168,8 @@ def build_manifest(
             text = row["sentence"].strip()
 
             if not relative_audio_path or not text:
+                continue
+            if Path(relative_audio_path).isdir():
                 continue
 
             try:
