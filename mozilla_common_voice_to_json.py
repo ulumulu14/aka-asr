@@ -169,7 +169,7 @@ def build_manifest(
 
             if not relative_audio_path or not text:
                 continue
-            if Path(relative_audio_path).isdir():
+            if Path(relative_audio_path).is_dir():
                 continue
 
             try:
