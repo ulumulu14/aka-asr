@@ -12,7 +12,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-DATA_LIMIT = 150000
+DATA_LIMIT = 25000
 
 
 def require_command(command: str) -> None:
