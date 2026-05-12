@@ -4,6 +4,7 @@ import argparse
 import csv
 from itertools import islice
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -33,6 +34,8 @@ def safe_extract_tar_gz(tar_path: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_dir_resolved = output_dir.resolve()
 
+    print("Starting archive extraction...")
+
     with tarfile.open(tar_path, "r:gz") as tar:
         for member in tqdm(tar.getmembers()):
             target_path = (output_dir / member.name).resolve()
@@ -44,6 +47,8 @@ def safe_extract_tar_gz(tar_path: Path, output_dir: Path) -> None:
                 raise RuntimeError(f"Archiwum zawiera link symboliczny/twardy: {member.name}")
 
         tar.extractall(output_dir)
+    
+    print("Extraction finished.")
 
 
 def find_tsv(extracted_dir: Path, split: str) -> Path:
@@ -163,7 +168,7 @@ def build_manifest(
             )
 
 
-        for i, row in enumerate(tqdm(islice(reader, DATA_LIMIT), total=DATA_LIMIT), start=1):
+        for i, row in enumerate(tqdm(reader, total=total), start=1):
             relative_audio_path = row["path"].strip()
             text = row["sentence"].strip()
 
@@ -285,10 +290,10 @@ def main() -> None:
     require_command("ffprobe")
 
     if not args.skip_extract:
-        print(f"[INFO] Rozpakowuję: {args.archive}")
+        print(f"[INFO] Extractug: {args.archive}")
         safe_extract_tar_gz(args.archive, args.extract_dir)
     else:
-        print(f"[INFO] Pomijam rozpakowanie, używam: {args.extract_dir}")
+        print(f"[INFO] Skipping data extraction, using: {args.extract_dir}")
 
     tsv_path = find_tsv(args.extract_dir, args.split)
     print(f"[INFO] Używam TSV: {tsv_path}")
