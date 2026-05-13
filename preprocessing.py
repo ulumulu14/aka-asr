@@ -206,6 +206,7 @@ class ASRDataset(Dataset):
                  augment: bool = False,
                  max_duration: float | None = 20.0,
                  min_duration: float | None = 0.5):
+
         with open(manifest_path, encoding="utf-8") as f:
             entries = [json.loads(line) for line in f if line.strip()]
 
@@ -224,6 +225,7 @@ class ASRDataset(Dataset):
         self.tokenizer = tokenizer
         self.cfg = audio_cfg
         self.spec_aug = SpecAugment() if augment else None
+        self.durations = [e.get('duration', 0.0) for e in entries]
 
     def __len__(self) -> int:
         return len(self.entries)

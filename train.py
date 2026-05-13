@@ -195,18 +195,21 @@ def greedy_decode_batch(
 from torch.utils.data import Sampler
 import random
 
-class LengthBucketSampler(Sampler):
-    def __init__(self, durations, batch_size, n_buckets=20, shuffle=True):
+class LengthBucketBatchSampler:
+    def __init__(self, durations, batch_size, shuffle=True):
         self.bs = batch_size
         self.shuffle = shuffle
         idx_sorted = sorted(range(len(durations)), key=lambda i: durations[i])
         self.batches = [idx_sorted[i:i+batch_size]
                         for i in range(0, len(idx_sorted), batch_size)]
     def __iter__(self):
-        b = self.batches[:]
-        if self.shuffle: random.shuffle(b)   # mieszamy batche, nie próbki w batchach
-        for batch in b: yield from batch
-    def __len__(self): return sum(len(b) for b in self.batches)
+        order = list(range(len(self.batches)))
+        if self.shuffle:
+            random.shuffle(order)
+        for i in order:
+            yield self.batches[i]
+    def __len__(self):
+        return len(self.batches)
 
 
 # Eval (loss + WER)
@@ -234,6 +237,7 @@ def evaluate(
 
         logits = model(audio, labels)
         loss = rnnt_loss(logits.float(), targets, logit_lengths, target_lengths, blank=0)
+        #loss = rnnt_loss(logits, targets, logit_lengths, target_lengths, blank=0)
         bs = audio.size(0)
         total_loss   += loss.item() * bs
         total_samples += bs
@@ -402,7 +406,8 @@ def train(
                     )
 
         # --- Eval ---
-        logger.info("Starting validation...")
+        #logger.info("Starting validation...")
+        print("Starting validation...")
         if (epoch + 1) % cfg.eval_every_epochs == 0:
             metrics = evaluate(model, val_loader, tokenizer, device,
                                max_symbols_per_step=cfg.max_symbols_per_step)
@@ -452,13 +457,13 @@ if __name__ == '__main__':
     #transcripts = ["ala ma kota", "kot ma ale", "ola pije sok", "kawa jest gorzka"]
     #train_manifest = tmp / "train_mainfest.jsonl"
     #val_manifest   = tmp / "val_manifest.jsonl"
-    
+    t = time.time()
     #batch_size = 32
-    batch_size = 4
+    batch_size = 16
     train_manifest = "/content/datasets/cv-corpus-25.0-2026-03-09-pl/train.jsonl"
     val_manifest   = "/content/datasets/cv-corpus-25.0-2026-03-09-pl/val.jsonl"
-    #train_manifest = "train_mainfest_test.json"
-    #val_manifest  =  "val_manifest_test.jsonl"
+    #rain_manifest = "D:\\kod\\src\\asr_pytorch_local\\train_manifest_22k_plPL.jsonl"
+    #val_manifest  =  "D:\\kod\\src\\asr_pytorch_local\\val_manifest_9K_plPL.json"
     root = Path("path/to/parent")
     pattern = re.compile(r"^experiment_\d+$")
 
@@ -486,32 +491,54 @@ if __name__ == '__main__':
     tokenizer = CharTokenizer(alphabet="abcdefghijklmnoprstuwxyzqvąćęłńóśźż ")
 
     # 3) Datasety + loadery
-    train_ds = ASRDataset(train_manifest, tokenizer, augment=True, max_duration=14)
-    val_ds   = ASRDataset(val_manifest,   tokenizer, augment=False, max_duration=14)
+    train_ds = ASRDataset(train_manifest, tokenizer, augment=True, max_duration=10)
+    val_ds   = ASRDataset(val_manifest,   tokenizer, augment=False, max_duration=10)
     #train_ds.precompute_features("train_manifest_22k_plPL.jsonl", "features_cache/")
     collate  = make_collate_fn(blank_id=0)
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  collate_fn=collate)
-    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, collate_fn=collate)
+
+    
+    cfg = TrainConfig(
+        peak_lr=1e-3, warmup_steps=15000,
+        #max_epochs=100, batch_size=batch_size, num_workers=8, # big
+        max_epochs=50, batch_size=batch_size, num_workers=0, # smol
+        use_amp=True, amp_dtype='bf16',
+        log_every=1000000000, eval_every_epochs=1,
+        ckpt_dir=f'checkpoints/conformer_m/experiment_{t}',
+        max_symbols_per_step=3,
+        weight_decay=1e-6, grad_clip=1.0,
+    )
+    #train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  collate_fn=collate)
+    bucket_sampler = LengthBucketBatchSampler(
+        train_ds.durations, batch_size=batch_size, shuffle=True,
+    )
+    train_loader = DataLoader(
+        train_ds,
+        batch_sampler=bucket_sampler,
+        num_workers=cfg.num_workers,
+        collate_fn=collate,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, collate_fn=collate)
 
     # Smol
-    model = ConformerTransducer(
-        vocab_size=tokenizer.vocab_size,
-        n_mels=80,
-        enc_layers=2, enc_dim=64, enc_heads=4, enc_kernel=15,
-        pred_layers=1, pred_dim=64, pred_heads=4, pred_kernel=7,
-        joint_dim=128, dropout=0.1,
-    )
+    # model = ConformerTransducer(
+    #     vocab_size=tokenizer.vocab_size,
+    #     n_mels=80,
+    #     enc_layers=2, enc_dim=64, enc_heads=4, enc_kernel=15,
+    #     pred_layers=1, pred_dim=64, pred_heads=4, pred_kernel=7,
+    #     joint_dim=128, dropout=0.1,
+    # )
 
     # Medium model
     # 1) pred_layers = 2/4
-    # 2) 
-    #model = ConformerTransducer(
-    #    vocab_size=tokenizer.vocab_size,
-    #    n_mels=80,
-    #    enc_layers=16, enc_dim=256, enc_heads=4, enc_kernel=31, # encoeder
-    #    pred_layers=1, pred_dim=320, pred_heads=4, pred_kernel=15, # decoder
-    #    joint_dim=320, dropout=0.1,
-    #)
+    #2) 
+    model = ConformerTransducer(
+       vocab_size=tokenizer.vocab_size,
+       n_mels=80,
+       enc_layers=16, enc_dim=256, enc_heads=4, enc_kernel=31, # encoeder
+       pred_layers=1, pred_dim=320, pred_heads=4, pred_kernel=15, # decoder
+       joint_dim=320, dropout=0.1,
+    )
 
     # Big mf model
     # model = ConformerTransducer(
@@ -535,18 +562,8 @@ if __name__ == '__main__':
     #     ckpt_dir=str(tmp / 'ckpts'),
     #     max_symbols_per_step=3,
     # )
-    t = time.time()
 
-    cfg = TrainConfig(
-        peak_lr=1e-3, warmup_steps=15000,
-        #max_epochs=100, batch_size=batch_size, num_workers=8, # big
-        max_epochs=50, batch_size=batch_size, num_workers=2, # smol
-        use_amp=True, amp_dtype='bf16',
-        log_every=1000000000, eval_every_epochs=1,
-        ckpt_dir=f'checkpoints/conformer_m/experiment_{t}',
-        max_symbols_per_step=3,
-        weight_decay=1e-6, grad_clip=1.0,
-    )
+
 
     try:
         train(model, train_loader, val_loader, tokenizer, cfg)
