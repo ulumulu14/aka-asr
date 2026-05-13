@@ -463,7 +463,7 @@ if __name__ == '__main__':
     
     
     # google colab paths
-    train_manifest = "/content/cv-corpus-25.0-2026-03-09-pl/train_mainfest.jsonl"
+    train_manifest = "/content/cv-corpus-25.0-2026-03-09-pl/train_manifest.jsonl"
     val_manifest   = "/content/cv-corpus-25.0-2026-03-09-pl/val_manifest_smol.jsonl"
 
     # local paths
