@@ -370,7 +370,7 @@ def train(
             avg = running_loss / max(1, running_n)
             lr = scheduler.get_last_lr()[0]
 
-            pbar.set_description(f"[epoch {epoch:3d} | step {global_step:7d}] | loss={avg:.4f}")
+            pbar.set_description(f"[epka {epoch:3d} | step {global_step:7d}] | loss={avg:.4f}")
 
             if not torch.isfinite(loss):
                 # Skip step ale nie zerujemy stanu -- czesto efekt pojedynczego skoku
@@ -407,11 +407,11 @@ def train(
 
         # --- Eval ---
         #logger.info("Starting validation...")
-        print("Starting validation...")
+        print("[INFO] Walidacja...")
         if (epoch + 1) % cfg.eval_every_epochs == 0:
             metrics = evaluate(model, val_loader, tokenizer, device,
                                max_symbols_per_step=cfg.max_symbols_per_step)
-            print(f"[ep {epoch:3d}] val_loss={metrics['loss']:.4f}  "
+            print(f"[epka {epoch:3d}] val_loss={metrics['loss']:.4f}  "
                   f"val_WER={metrics['wer']:.2%}")
             for ref, hyp in metrics['examples']:
                 print(f"    REF: {ref!r}")
@@ -424,7 +424,7 @@ def train(
                           model=model, optimizer=optimizer, scheduler=scheduler,
                           scaler=scaler, step=global_step, epoch=epoch,
                           best_wer=best_wer, cfg=cfg)
-                print(f"    -> nowy best WER = {best_wer:.2%}, zapisano best.pt")
+                print(f"    -> nowy zajebisty WER = {best_wer:.2%}, zapisuje zajebisty best.pt")
 
         # Last N checkpoints
         save_ckpt(ckpt_dir / f'epoch_{epoch:04d}.pt',
@@ -433,7 +433,7 @@ def train(
                   best_wer=best_wer, cfg=cfg)
         _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
 
-    print(f"\nTrening zakonczony. best WER = {best_wer:.2%}")
+    print(f"\nnajzajebistrzy WER = {best_wer:.2%}")
 
 
 if __name__ == '__main__':
@@ -464,7 +464,7 @@ if __name__ == '__main__':
     
     # google colab paths
     train_manifest = "/content/cv-corpus-25.0-2026-03-09-pl/train_mainfest.jsonl"
-    val_manifest   = "/content/datasets/cv-corpus-25.0-2026-03-09-pl/val_manifest.jsonl"
+    val_manifest   = "/content/cv-corpus-25.0-2026-03-09-pl/val_manifest_smol.jsonl"
 
     # local paths
     #train_manifest = "D:\\kod\\src\\asr_pytorch_local\\train_manifest_22k_plPL.jsonl"
