@@ -460,9 +460,14 @@ if __name__ == '__main__':
     t = time.time()
     #batch_size = 32
     batch_size = 16
-    train_manifest = "/content/datasets/cv-corpus-25.0-2026-03-09-pl/train.jsonl"
-    val_manifest   = "/content/datasets/cv-corpus-25.0-2026-03-09-pl/val.jsonl"
-    #rain_manifest = "D:\\kod\\src\\asr_pytorch_local\\train_manifest_22k_plPL.jsonl"
+    
+    
+    # google colab paths
+    train_manifest = "/content/cv-corpus-25.0-2026-03-09-pl/train_mainfest.jsonl"
+    val_manifest   = "/content/datasets/cv-corpus-25.0-2026-03-09-pl/val_manifest.jsonl"
+
+    # local paths
+    #train_manifest = "D:\\kod\\src\\asr_pytorch_local\\train_manifest_22k_plPL.jsonl"
     #val_manifest  =  "D:\\kod\\src\\asr_pytorch_local\\val_manifest_9K_plPL.json"
     root = Path("path/to/parent")
     pattern = re.compile(r"^experiment_\d+$")
