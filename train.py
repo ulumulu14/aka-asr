@@ -237,7 +237,7 @@ def evaluate(
     refs: list[str] = []
     hyps: list[str] = []
 
-    for batch in tqdm(loader, disable=not sys.stderr.isatty()):
+    for batch in tqdm(loader, dynamic_ncols=True, ascii=True):
         audio  = batch['audio_features'].to(device)
         labels = batch['label_tokens'].to(device)
         targets = batch['targets'].to(device)
@@ -360,7 +360,7 @@ def train(
             optimizer.zero_grad(set_to_none=True)
 
             #for batch_idx, batch in enumerate(tqdm(train_loader)):
-            for batch_idx, batch in (enumerate(pbar := tqdm(train_loader, disable=not sys.stderr.isatty()))):
+            for batch_idx, batch in (enumerate(pbar := tqdm(train_loader, dynamic_ncols=True, ascii=True))):
                 audio  = batch['audio_features'].to(device, non_blocking=True)
                 labels = batch['label_tokens'].to(device, non_blocking=True)
                 targets   = batch['targets'].to(device, non_blocking=True)
