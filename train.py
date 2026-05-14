@@ -68,7 +68,7 @@ logging.basicConfig(
 )
 
 # file_console_logger "plik + terminal" — po prostu używasz roota albo dowolnego zwykłego file_console_loggera
-file_console_file_console_logger = logging.getfile_console_logger("file_and_console")
+file_console_file_console_logger = logging.getLogger("file_and_console")
 # nic więcej nie trzeba — propaguje do roota, więc pisze do pliku i terminala
 
 # file_console_logger "tylko plik"
