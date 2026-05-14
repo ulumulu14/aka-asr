@@ -537,7 +537,7 @@ if __name__ == '__main__':
         max_epochs=100, batch_size=batch_size, num_workers=n_workers, # big
         #max_epochs=50, batch_size=batch_size, num_workers=0, # smol
         use_amp=True, amp_dtype='bf16',
-        log_every=len(train_loader), eval_every_epochs=1,
+        log_every=len(train_loader)+1, eval_every_epochs=1,
         ckpt_dir=f'checkpoints/conformer_m/experiment_{t}',
         max_symbols_per_step=3,
         weight_decay=1e-6, grad_clip=1.0,
