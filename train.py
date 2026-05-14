@@ -607,7 +607,7 @@ def main(config_path: str):
     val_loader = DataLoader(
         val_ds,
         batch_sampler=val_bucket_sampler,
-        num_workers=cfg.num_workers,
+        num_workers=n_workers,
         collate_fn=collate,
         pin_memory=True,
     )
