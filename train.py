@@ -517,16 +517,7 @@ if __name__ == '__main__':
     collate  = make_collate_fn(blank_id=0)
 
     
-    cfg = TrainConfig(
-        peak_lr=1e-3, warmup_steps=15000,
-        max_epochs=100, batch_size=batch_size, num_workers=8, # big
-        #max_epochs=50, batch_size=batch_size, num_workers=0, # smol
-        use_amp=True, amp_dtype='bf16',
-        log_every=1, eval_every_epochs=1,
-        ckpt_dir=f'checkpoints/conformer_m/experiment_{t}',
-        max_symbols_per_step=3,
-        weight_decay=1e-6, grad_clip=1.0,
-    )
+
     #train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  collate_fn=collate)
     bucket_sampler = LengthBucketBatchSampler(
         train_ds.durations, batch_size=batch_size, shuffle=True,
@@ -539,7 +530,17 @@ if __name__ == '__main__':
         pin_memory=True,
     )
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate)
-
+    
+    cfg = TrainConfig(
+        peak_lr=1e-3, warmup_steps=15000,
+        max_epochs=100, batch_size=batch_size, num_workers=8, # big
+        #max_epochs=50, batch_size=batch_size, num_workers=0, # smol
+        use_amp=True, amp_dtype='bf16',
+        log_every=len(train_loader), eval_every_epochs=1,
+        ckpt_dir=f'checkpoints/conformer_m/experiment_{t}',
+        max_symbols_per_step=3,
+        weight_decay=1e-6, grad_clip=1.0,
+    )
     # Smol
     # model = ConformerTransducer(
     #     vocab_size=tokenizer.vocab_size,
@@ -588,4 +589,4 @@ if __name__ == '__main__':
     try:
         train(model, train_loader, val_loader, tokenizer, cfg)
     except (ImportError, ModuleNotFoundError) as e:
-        print(f"Smoke test pominiety: {e}  (zainstaluj torchaudio do treningu)")
+        logger.exception(f"Smoke test pominiety: {e}  (zainstaluj torchaudio do treningu)")
