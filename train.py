@@ -429,35 +429,35 @@ def train(
 
         # --- Eval ---
         #file_console_logger.info("Starting validation...")
-        file_console_logger.info("Walidacja...")
-        try:
-            if (epoch + 1) % cfg.eval_every_epochs == 0:
-                metrics = evaluate(
-                    model, val_loader, tokenizer, device,
-                                    max_symbols_per_step=cfg.max_symbols_per_step)
-                file_console_logger.info(f"[epka {epoch:3d}] val_loss={metrics['loss']:.4f}  ")
-                file_console_logger.info(f"val_WER={metrics['wer']:.2%}")
-                for ref, hyp in metrics['examples']:
-                    file_console_logger.info(f"REF: {ref!r}")
-                    file_console_logger.info(f"HYP: {hyp!r}")
+    file_console_logger.info("Walidacja...")
+    try:
+        if (epoch + 1) % cfg.eval_every_epochs == 0:
+            metrics = evaluate(
+                model, val_loader, tokenizer, device,
+                                max_symbols_per_step=cfg.max_symbols_per_step)
+            file_console_logger.info(f"[epka {epoch:3d}] val_loss={metrics['loss']:.4f}  ")
+            file_console_logger.info(f"val_WER={metrics['wer']:.2%}")
+            for ref, hyp in metrics['examples']:
+                file_console_logger.info(f"REF: {ref!r}")
+                file_console_logger.info(f"HYP: {hyp!r}")
 
-                # Best checkpoint
-                if metrics['wer'] < best_wer:
-                    best_wer = metrics['wer']
-                    save_ckpt(ckpt_dir / 'best.pt',
-                            model=model, optimizer=optimizer, scheduler=scheduler,
-                            scaler=scaler, step=global_step, epoch=epoch,
-                            best_wer=best_wer, cfg=cfg)
-                    file_console_logger.info(f"    -> nowy zajebisty WER = {best_wer:.2%}, zapisuje zajebisty best.pt")
+            # Best checkpoint
+            if metrics['wer'] < best_wer:
+                best_wer = metrics['wer']
+                save_ckpt(ckpt_dir / 'best.pt',
+                        model=model, optimizer=optimizer, scheduler=scheduler,
+                        scaler=scaler, step=global_step, epoch=epoch,
+                        best_wer=best_wer, cfg=cfg)
+                file_console_logger.info(f"    -> nowy zajebisty WER = {best_wer:.2%}, zapisuje zajebisty best.pt")
 
-            # Last N checkpoints
-            save_ckpt(ckpt_dir / f'epoch_{epoch:04d}.pt',
-                    model=model, optimizer=optimizer, scheduler=scheduler,
-                    scaler=scaler, step=global_step, epoch=epoch,
-                    best_wer=best_wer, cfg=cfg)
-            _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
-        except Exception as e:
-            file_console_logger.error(e)
+        # Last N checkpoints
+        save_ckpt(ckpt_dir / f'epoch_{epoch:04d}.pt',
+                model=model, optimizer=optimizer, scheduler=scheduler,
+                scaler=scaler, step=global_step, epoch=epoch,
+                best_wer=best_wer, cfg=cfg)
+        _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
+    except Exception as e:
+        file_console_logger.error(e)
 
     file_console_logger.info(f"\nnajzajebistrzy WER = {best_wer:.2%}")
 
