@@ -322,8 +322,6 @@ def train(
     if device.type == 'cuda':
         torch.cuda.manual_seed_all(cfg.seed)
 
-    logger = logging.getLogger(__name__)
-
     # --- Optimizer: weight decay tylko na "tlustych" parametrach ---
     decay, no_decay = [], []
     for n, p in model.named_parameters():
@@ -414,11 +412,11 @@ def train(
                             f"epoch time={epoch_time}"       
                         )
     except Exception as e:
-        logger.error(e)
+        logging.error(e)
 
         # --- Eval ---
         #logger.info("Starting validation...")
-        logging.info("[INFO] Walidacja...")
+        logging.info("Walidacja...")
         try:
             if (epoch + 1) % cfg.eval_every_epochs == 0:
                 metrics = evaluate(model, val_loader, tokenizer, device,
@@ -487,10 +485,10 @@ if __name__ == '__main__':
     pattern = re.compile(r"^experiment_\d+$")
 
     #logging.info(torch.cuda.is_available())
-    logging.info(f"[INFO] CUDA diwajses: {torch.cuda.device_count()}")
+    logging.info(f"CUDA diwajses: {torch.cuda.device_count()}")
     #logging.info(torch.cuda.current_device())
     #logging.info(torch.cuda.device(0))
-    logging.info(f"[INFO] {torch.cuda.get_device_name(torch.cuda.device_count()-1)}")
+    logging.info(f"{torch.cuda.get_device_name(torch.cuda.device_count()-1)}")
 
     #with open('config.yaml', 'r') as file:
     #    config = yaml.safe_load(file)
