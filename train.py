@@ -518,8 +518,8 @@ if __name__ == '__main__':
     
     cfg = TrainConfig(
         peak_lr=1e-3, warmup_steps=15000,
-        #max_epochs=100, batch_size=batch_size, num_workers=8, # big
-        max_epochs=50, batch_size=batch_size, num_workers=0, # smol
+        max_epochs=100, batch_size=batch_size, num_workers=8, # big
+        #max_epochs=50, batch_size=batch_size, num_workers=0, # smol
         use_amp=True, amp_dtype='bf16',
         log_every=1, eval_every_epochs=1,
         ckpt_dir=f'checkpoints/conformer_m/experiment_{t}',
