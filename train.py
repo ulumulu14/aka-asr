@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import logging
-logger = logging.getLogger(__name__)
+#file_console_logger = logging.getfile_console_logger(__name__)
 import math
 import json
 import os
@@ -66,6 +66,17 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# file_console_logger "plik + terminal" — po prostu używasz roota albo dowolnego zwykłego file_console_loggera
+file_console_file_console_logger = logging.getfile_console_logger("file_and_console")
+# nic więcej nie trzeba — propaguje do roota, więc pisze do pliku i terminala
+
+# file_console_logger "tylko plik"
+file_file_console_logger = logging.getfile_console_logger("file_only")
+file_file_console_logger.propagate = False   # odcinamy go od handlerów roota
+file_handler = logging.FileHandler("debug.log")
+file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+file_file_console_logger.addHandler(file_handler)
 
 # Config
 
@@ -350,7 +361,7 @@ def train(
     global_step = 0
     t0 = time.time()
 
-    logger.info('Trening...')
+    file_console_logger.info('Trening...')
     try:
         for epoch in range(cfg.max_epochs):
             t0_epoch = time.time()
@@ -383,7 +394,7 @@ def train(
 
                 if not torch.isfinite(loss):
                     # Skip step ale nie zerujemy stanu -- czesto efekt pojedynczego skoku
-                    logger.info(f"[step {global_step}] loss={loss.item()} -- pomijam batch")
+                    file_console_logger.info(f"[step {global_step}] loss={loss.item()} -- pomijam batch")
                     optimizer.zero_grad(set_to_none=True)
                     continue
 
@@ -406,7 +417,7 @@ def train(
                         avg = running_loss / max(1, running_n)
                         elapsed = time.time() - t0
                         epoch_time = time.time() - t0_epoch
-                        logger.info(
+                        file_console_logger.info(
                             f"[ep {epoch:3d} | step {global_step:7d}] "
                             f"loss={avg:.4f}  lr={lr:.2e}  "
                             f"|grad|={float(grad_norm):.2f}  "
@@ -414,21 +425,21 @@ def train(
                             f"epoch time={epoch_time}"       
                         )
     except Exception as e:
-        logger.error(e)
+        file_console_logger.error(e)
 
         # --- Eval ---
-        #logger.info("Starting validation...")
-        logger.info("Walidacja...")
+        #file_console_logger.info("Starting validation...")
+        file_console_logger.info("Walidacja...")
         try:
             if (epoch + 1) % cfg.eval_every_epochs == 0:
                 metrics = evaluate(
                     model, val_loader, tokenizer, device,
                                     max_symbols_per_step=cfg.max_symbols_per_step)
-                logger.info(f"[epka {epoch:3d}] val_loss={metrics['loss']:.4f}  ")
-                logger.info(f"val_WER={metrics['wer']:.2%}")
+                file_console_logger.info(f"[epka {epoch:3d}] val_loss={metrics['loss']:.4f}  ")
+                file_console_logger.info(f"val_WER={metrics['wer']:.2%}")
                 for ref, hyp in metrics['examples']:
-                    logger.info(f"REF: {ref!r}")
-                    logger.info(f"HYP: {hyp!r}")
+                    file_console_logger.info(f"REF: {ref!r}")
+                    file_console_logger.info(f"HYP: {hyp!r}")
 
                 # Best checkpoint
                 if metrics['wer'] < best_wer:
@@ -437,7 +448,7 @@ def train(
                             model=model, optimizer=optimizer, scheduler=scheduler,
                             scaler=scaler, step=global_step, epoch=epoch,
                             best_wer=best_wer, cfg=cfg)
-                    logger.info(f"    -> nowy zajebisty WER = {best_wer:.2%}, zapisuje zajebisty best.pt")
+                    file_console_logger.info(f"    -> nowy zajebisty WER = {best_wer:.2%}, zapisuje zajebisty best.pt")
 
             # Last N checkpoints
             save_ckpt(ckpt_dir / f'epoch_{epoch:04d}.pt',
@@ -446,9 +457,9 @@ def train(
                     best_wer=best_wer, cfg=cfg)
             _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
         except Exception as e:
-            logger.error(e)
+            file_console_logger.error(e)
 
-    logger.info(f"\nnajzajebistrzy WER = {best_wer:.2%}")
+    file_console_logger.info(f"\nnajzajebistrzy WER = {best_wer:.2%}")
 
 
 if __name__ == '__main__':
@@ -488,11 +499,11 @@ if __name__ == '__main__':
     root = Path("path/to/parent")
     pattern = re.compile(r"^experiment_\d+$")
 
-    #logger.info(torch.cuda.is_available())
-    logger.info(f"CUDA diwajses: {torch.cuda.device_count()}")
-    #logger.info(torch.cuda.current_device())
-    #logger.info(torch.cuda.device(0))
-    logger.info(f"{torch.cuda.get_device_name(torch.cuda.device_count()-1)}")
+    #file_console_logger.info(torch.cuda.is_available())
+    file_console_logger.info(f"CUDA diwajses: {torch.cuda.device_count()}")
+    #file_console_logger.info(torch.cuda.current_device())
+    #file_console_logger.info(torch.cuda.device(0))
+    file_console_logger.info(f"{torch.cuda.get_device_name(torch.cuda.device_count()-1)}")
 
     #with open('config.yaml', 'r') as file:
     #    config = yaml.safe_load(file)
@@ -590,4 +601,4 @@ if __name__ == '__main__':
     try:
         train(model, train_loader, val_loader, tokenizer, cfg)
     except (ImportError, ModuleNotFoundError) as e:
-        logger.exception(f"Smoke test pominiety: {e}  (zainstaluj torchaudio do treningu)")
+        file_console_logger.exception(f"Smoke test pominiety: {e}  (zainstaluj torchaudio do treningu)")
