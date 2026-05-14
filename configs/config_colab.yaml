@@ -10,3 +10,4 @@ training:
   epochs: 50
   batch_size: 16
   n_workers: 8
+  max_audio_len: 10
