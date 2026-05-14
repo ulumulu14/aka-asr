@@ -56,7 +56,14 @@ from preprocessing import (
 _DTYPES = {'fp32': torch.float32, 'fp16': torch.float16, 'bf16': torch.bfloat16}
 
 
-logging.basicConfig(filename='myapp.log', level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("debug.log"),
+        logging.StreamHandler()
+    ]
+)
 
 # Config
 
@@ -343,97 +350,104 @@ def train(
     global_step = 0
     t0 = time.time()
 
-    for epoch in range(cfg.max_epochs):
-        t0_epoch = time.time()
-        model.train()
-        running_loss = 0.0
-        running_n = 0
-        optimizer.zero_grad(set_to_none=True)
+    logging.info('Trening...')
+    try:
+        for epoch in range(cfg.max_epochs):
+            t0_epoch = time.time()
+            model.train()
+            running_loss = 0.0
+            running_n = 0
+            optimizer.zero_grad(set_to_none=True)
 
-        #for batch_idx, batch in enumerate(tqdm(train_loader)):
-        for batch_idx, batch in (enumerate(pbar := tqdm(train_loader))):
-            audio  = batch['audio_features'].to(device, non_blocking=True)
-            labels = batch['label_tokens'].to(device, non_blocking=True)
-            targets   = batch['targets'].to(device, non_blocking=True)
-            logit_lengths  = batch['logit_lengths'].to(device, non_blocking=True)
-            target_lengths = batch['target_lengths'].to(device, non_blocking=True)
+            #for batch_idx, batch in enumerate(tqdm(train_loader)):
+            for batch_idx, batch in (enumerate(pbar := tqdm(train_loader))):
+                audio  = batch['audio_features'].to(device, non_blocking=True)
+                labels = batch['label_tokens'].to(device, non_blocking=True)
+                targets   = batch['targets'].to(device, non_blocking=True)
+                logit_lengths  = batch['logit_lengths'].to(device, non_blocking=True)
+                target_lengths = batch['target_lengths'].to(device, non_blocking=True)
 
-            # Forward w AMP, loss zawsze w fp32
-            with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
-                logits = model(audio, labels)
-            loss = rnnt_loss(
-                logits.float(), targets, logit_lengths, target_lengths, blank=0,
-            )
+                # Forward w AMP, loss zawsze w fp32
+                with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
+                    logits = model(audio, labels)
+                loss = rnnt_loss(
+                    logits.float(), targets, logit_lengths, target_lengths, blank=0,
+                )
 
-            running_loss += loss.item() * audio.size(0)
-            running_n    += audio.size(0)
-            avg = running_loss / max(1, running_n)
-            lr = scheduler.get_last_lr()[0]
+                running_loss += loss.item() * audio.size(0)
+                running_n    += audio.size(0)
+                avg = running_loss / max(1, running_n)
+                lr = scheduler.get_last_lr()[0]
 
-            pbar.set_description(f"[epka {epoch:3d} | step {global_step:7d}] | loss={avg:.4f}")
+                pbar.set_description(f"[epka {epoch:3d} | step {global_step:7d}] | loss={avg:.4f}")
 
-            if not torch.isfinite(loss):
-                # Skip step ale nie zerujemy stanu -- czesto efekt pojedynczego skoku
-                print(f"[step {global_step}] loss={loss.item()} -- pomijam batch")
-                optimizer.zero_grad(set_to_none=True)
-                continue
+                if not torch.isfinite(loss):
+                    # Skip step ale nie zerujemy stanu -- czesto efekt pojedynczego skoku
+                    logging.info(f"[step {global_step}] loss={loss.item()} -- pomijam batch")
+                    optimizer.zero_grad(set_to_none=True)
+                    continue
 
-            scaler.scale(loss / cfg.accum_grad).backward()
+                scaler.scale(loss / cfg.accum_grad).backward()
 
-            running_loss += loss.item() * audio.size(0)
-            running_n    += audio.size(0)
+                running_loss += loss.item() * audio.size(0)
+                running_n    += audio.size(0)
 
-            if (batch_idx + 1) % cfg.accum_grad == 0:
-                scaler.unscale_(optimizer)
-                grad_norm = nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
-                scaler.step(optimizer)
-                scaler.update()
-                scheduler.step()
-                optimizer.zero_grad(set_to_none=True)
-                global_step += 1
+                if (batch_idx + 1) % cfg.accum_grad == 0:
+                    scaler.unscale_(optimizer)
+                    grad_norm = nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
+                    scaler.step(optimizer)
+                    scaler.update()
+                    scheduler.step()
+                    optimizer.zero_grad(set_to_none=True)
+                    global_step += 1
 
-                if global_step % cfg.log_every == 0:
-                    lr = scheduler.get_last_lr()[0]
-                    avg = running_loss / max(1, running_n)
-                    elapsed = time.time() - t0
-                    epoch_time = time.time() - t0_epoch
-                    print(
-                        f"[ep {epoch:3d} | step {global_step:7d}] "
-                        f"loss={avg:.4f}  lr={lr:.2e}  "
-                        f"|grad|={float(grad_norm):.2f}  "
-                        f"global time={elapsed/60:.1f}m"
-                        f"epoch time={epoch_time}"       
-                    )
+                    if global_step % cfg.log_every == 0:
+                        lr = scheduler.get_last_lr()[0]
+                        avg = running_loss / max(1, running_n)
+                        elapsed = time.time() - t0
+                        epoch_time = time.time() - t0_epoch
+                        logging.info(
+                            f"[ep {epoch:3d} | step {global_step:7d}] "
+                            f"loss={avg:.4f}  lr={lr:.2e}  "
+                            f"|grad|={float(grad_norm):.2f}  "
+                            f"global time={elapsed/60:.1f}m"
+                            f"epoch time={epoch_time}"       
+                        )
+    except Exception as e:
+        logger.error(e)
 
         # --- Eval ---
         #logger.info("Starting validation...")
-        print("[INFO] Walidacja...")
-        if (epoch + 1) % cfg.eval_every_epochs == 0:
-            metrics = evaluate(model, val_loader, tokenizer, device,
-                               max_symbols_per_step=cfg.max_symbols_per_step)
-            print(f"[epka {epoch:3d}] val_loss={metrics['loss']:.4f}  "
-                  f"val_WER={metrics['wer']:.2%}")
-            for ref, hyp in metrics['examples']:
-                print(f"    REF: {ref!r}")
-                print(f"    HYP: {hyp!r}")
+        logging.info("[INFO] Walidacja...")
+        try:
+            if (epoch + 1) % cfg.eval_every_epochs == 0:
+                metrics = evaluate(model, val_loader, tokenizer, device,
+                                max_symbols_per_step=cfg.max_symbols_per_step)
+                logging.info(f"[epka {epoch:3d}] val_loss={metrics['loss']:.4f}  "
+                    f"val_WER={metrics['wer']:.2%}")
+                for ref, hyp in metrics['examples']:
+                    print(f"    REF: {ref!r}")
+                    print(f"    HYP: {hyp!r}")
 
-            # Best checkpoint
-            if metrics['wer'] < best_wer:
-                best_wer = metrics['wer']
-                save_ckpt(ckpt_dir / 'best.pt',
-                          model=model, optimizer=optimizer, scheduler=scheduler,
-                          scaler=scaler, step=global_step, epoch=epoch,
-                          best_wer=best_wer, cfg=cfg)
-                print(f"    -> nowy zajebisty WER = {best_wer:.2%}, zapisuje zajebisty best.pt")
+                # Best checkpoint
+                if metrics['wer'] < best_wer:
+                    best_wer = metrics['wer']
+                    save_ckpt(ckpt_dir / 'best.pt',
+                            model=model, optimizer=optimizer, scheduler=scheduler,
+                            scaler=scaler, step=global_step, epoch=epoch,
+                            best_wer=best_wer, cfg=cfg)
+                    logging.info(f"    -> nowy zajebisty WER = {best_wer:.2%}, zapisuje zajebisty best.pt")
 
-        # Last N checkpoints
-        save_ckpt(ckpt_dir / f'epoch_{epoch:04d}.pt',
-                  model=model, optimizer=optimizer, scheduler=scheduler,
-                  scaler=scaler, step=global_step, epoch=epoch,
-                  best_wer=best_wer, cfg=cfg)
-        _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
+            # Last N checkpoints
+            save_ckpt(ckpt_dir / f'epoch_{epoch:04d}.pt',
+                    model=model, optimizer=optimizer, scheduler=scheduler,
+                    scaler=scaler, step=global_step, epoch=epoch,
+                    best_wer=best_wer, cfg=cfg)
+            _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
+        except Exception as e:
+            logging.error(e)
 
-    print(f"\nnajzajebistrzy WER = {best_wer:.2%}")
+    logging.info(f"\nnajzajebistrzy WER = {best_wer:.2%}")
 
 
 if __name__ == '__main__':
@@ -472,11 +486,11 @@ if __name__ == '__main__':
     root = Path("path/to/parent")
     pattern = re.compile(r"^experiment_\d+$")
 
-    #print(torch.cuda.is_available())
-    print(f"[INFO] CUDA diwajses: {torch.cuda.device_count()}")
-    #print(torch.cuda.current_device())
-    #print(torch.cuda.device(0))
-    print(f"[INFO] {torch.cuda.get_device_name(torch.cuda.device_count()-1)}")
+    #logging.info(torch.cuda.is_available())
+    logging.info(f"[INFO] CUDA diwajses: {torch.cuda.device_count()}")
+    #logging.info(torch.cuda.current_device())
+    #logging.info(torch.cuda.device(0))
+    logging.info(f"[INFO] {torch.cuda.get_device_name(torch.cuda.device_count()-1)}")
 
     #with open('config.yaml', 'r') as file:
     #    config = yaml.safe_load(file)
