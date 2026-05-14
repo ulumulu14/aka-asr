@@ -475,6 +475,7 @@ if __name__ == '__main__':
     t = time.time()
     #batch_size = 32
     batch_size = 16
+    n_workers = 8
     
     
     # google colab paths
@@ -525,15 +526,15 @@ if __name__ == '__main__':
     train_loader = DataLoader(
         train_ds,
         batch_sampler=bucket_sampler,
-        num_workers=cfg.num_workers,
+        num_workers=n_workers,
         collate_fn=collate,
         pin_memory=True,
     )
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate)
-    
+
     cfg = TrainConfig(
         peak_lr=1e-3, warmup_steps=15000,
-        max_epochs=100, batch_size=batch_size, num_workers=8, # big
+        max_epochs=100, batch_size=batch_size, num_workers=n_workers, # big
         #max_epochs=50, batch_size=batch_size, num_workers=0, # smol
         use_amp=True, amp_dtype='bf16',
         log_every=len(train_loader), eval_every_epochs=1,
