@@ -588,19 +588,30 @@ def main(config_path: str):
     collate = make_collate_fn(blank_id=0)
 
     # train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  collate_fn=collate)
-    bucket_sampler = LengthBucketBatchSampler(
+    train_bucket_sampler = LengthBucketBatchSampler(
         train_ds.durations,
         batch_size=batch_size,
         shuffle=True,
     )
+    val_bucket_sampler = LengthBucketBatchSampler(
+        val_ds.durations, batch_size=batch_size, shuffle=False,
+    )
+
     train_loader = DataLoader(
         train_ds,
-        batch_sampler=bucket_sampler,
+        batch_sampler=train_bucket_sampler,
         num_workers=n_workers,
         collate_fn=collate,
         pin_memory=True,
     )
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate)
+    val_loader = DataLoader(
+        val_ds,
+        batch_sampler=val_bucket_sampler,
+        num_workers=cfg.num_workers,
+        collate_fn=collate,
+        pin_memory=True,
+    )
+    #val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate)
 
     cfg = TrainConfig(
         peak_lr=1e-3,
