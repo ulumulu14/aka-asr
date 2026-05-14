@@ -476,7 +476,7 @@ if __name__ == '__main__':
     print(f"[INFO] CUDA diwajses: {torch.cuda.device_count()}")
     #print(torch.cuda.current_device())
     #print(torch.cuda.device(0))
-    print(f":[INFO] torch.cuda.get_device_name(torch.cuda.device_count()-1)")
+    print(f"[INFO] {torch.cuda.get_device_name(torch.cuda.device_count()-1)}")
 
     #with open('config.yaml', 'r') as file:
     #    config = yaml.safe_load(file)
