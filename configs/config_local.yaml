@@ -1,0 +1,12 @@
+model:
+  name: resnet50
+  pretrained: true
+optimizer:
+  lr: 0.001
+  weight_decay: 0.0001
+training:
+  train_manifest_path: D:\\kod\\src\\asr_pytorch_local\\train_manifest_22k_plPL.jsonl
+  val_manifest_path: D:\\kod\\src\\asr_pytorch_local\\val_manifest_9K_plPL.json
+  epochs: 50
+  batch_size: 4
+  n_workers: 0
