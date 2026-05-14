@@ -72,7 +72,7 @@ file_console_logger = logging.getLogger("file_and_console")
 # nic więcej nie trzeba — propaguje do roota, więc pisze do pliku i terminala
 
 # file_console_logger "tylko plik"
-file_console_logger = logging.getfile_console_logger("file_only")
+file_console_logger = logging.getLogger("file_only")
 file_console_logger.propagate = False   # odcinamy go od handlerów roota
 file_handler = logging.FileHandler("debug.log")
 file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
