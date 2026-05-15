@@ -13,47 +13,72 @@ Zawiera:
     - Checkpointing (best by WER + last)
 """
 
-
-
 from __future__ import annotations
 from pathlib import Path
 
+import argparse
+import logging
+
+# file_console_logger = logging.getfile_console_logger(__name__)
 import math
 import json
 import os
+
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import tempfile
 import re
 import time
+import sys
 import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import click
 import numpy as np
 import pandas as pd
 import soundfile as sf
-
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from torchsummary import summary
+from tqdm import tqdm
+from tqdm.contrib import tenumerate
 
 
 from model import ConformerTransducer, rnnt_loss
 from preprocessing import (
-    ASRDataset, CharTokenizer, AudioConfig,
-    make_collate_fn, subsampled_length, Tokenizer,
+    ASRDataset,
+    CharTokenizer,
+    AudioConfig,
+    make_collate_fn,
+    subsampled_length,
+    Tokenizer,
 )
 
+_DTYPES = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler("debug.log"), logging.StreamHandler()],
+)
 
-_DTYPES = {'fp32': torch.float32, 'fp16': torch.float16, 'bf16': torch.bfloat16}
+# file_console_logger "plik + terminal" — po prostu używasz roota albo dowolnego zwykłego file_console_loggera
+file_console_logger = logging.getLogger("file_and_console")
+# nic więcej nie trzeba — propaguje do roota, więc pisze do pliku i terminala
 
+# file_console_logger "tylko plik"
+file_logger = logging.getLogger("file_only")
+file_logger.propagate = False  # odcinamy go od handlerów roota
+file_handler = logging.FileHandler("debug.log")
+file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+file_logger.addHandler(file_handler)
 
 # Config
+
 
 @dataclass
 class TrainConfig:
@@ -75,14 +100,14 @@ class TrainConfig:
 
     # AMP
     use_amp: bool = True
-    amp_dtype: str = 'bf16' #'bf16' | 'fp16' | 'fp32'
+    amp_dtype: str = "bf16"  #'bf16' | 'fp16' | 'fp32'
 
     # Log and eval
     log_every: int = 50
     eval_every_epochs: int = 1
 
     # Save ckpt
-    ckpt_dir: str = 'checkpoints'
+    ckpt_dir: str = "checkpoints"
     keep_last: int = 3
 
     # Dekodowanie podczas eval
@@ -92,12 +117,13 @@ class TrainConfig:
     seed: int = 42
 
 
-
 # WER
 def _edit_distance(ref: list, hyp: list) -> int:
     n, m = len(ref), len(hyp)
-    if n == 0: return m
-    if m == 0: return n
+    if n == 0:
+        return m
+    if m == 0:
+        return n
     prev = list(range(m + 1))
     cur = [0] * (m + 1)
     for i in range(1, n + 1):
@@ -121,6 +147,7 @@ def compute_wer(refs: list[str], hyps: list[str]) -> float:
 
 # Scheduler -- Noam (warmup + 1/sqrt(step) decay), znormalizowany do peak_lr
 
+
 def make_noam_scheduler(optimizer, warmup_steps: int) -> LambdaLR:
     """factor(step) = warmup^0.5 * min(step^-0.5, step * warmup^-1.5)
     factor(warmup) = 1, czyli lr osiaga peak_lr na koncu warmupu i potem maleje 1/sqrt(step).
@@ -129,23 +156,23 @@ def make_noam_scheduler(optimizer, warmup_steps: int) -> LambdaLR:
 
     def lr_lambda(step: int) -> float:
         s = max(1, step)
-        return warmup ** 0.5 * min(s ** -0.5, s * warmup ** -1.5)
+        return warmup**0.5 * min(s**-0.5, s * warmup**-1.5)
 
     return LambdaLR(optimizer, lr_lambda)
 
 
 # Greedy decode na batchu (z poszanowaniem logit_lengths)
 
+
 @torch.no_grad()
 def greedy_decode_batch(
-        model: ConformerTransducer,
-        audio_features: torch.Tensor,
-        logit_lengths: torch.Tensor,
-        sos_id: int = 0,
-        blank_id: int = 0,
-        max_symbols_per_step: int = 5
-    ) -> list[list[int]]:
-
+    model: ConformerTransducer,
+    audio_features: torch.Tensor,
+    logit_lengths: torch.Tensor,
+    sos_id: int = 0,
+    blank_id: int = 0,
+    max_symbols_per_step: int = 5,
+) -> list[list[int]]:
     """Decoduje caly batch, ale dla kazdego sampla iteruje tylko po jego
     rzeczywistej liczbie ramek (encoder output), bez decodowania paddingu.
 
@@ -153,31 +180,30 @@ def greedy_decode_batch(
     Dla produkcji uzyj cache stanu (lub stateless predictor + N-gram).
     """
 
-    
     model.eval()
     device = audio_features.device
     B = audio_features.shape[0]
 
-    f = model.encoder(audio_features)               # (B, T', d_enc)
+    f = model.encoder(audio_features)  # (B, T', d_enc)
     enc_lens = [int(L) for L in logit_lengths]
 
     all_hyps: list[list[int]] = []
     for b in range(B):
         T_b = enc_lens[b]
-        f_b = f[b:b + 1, :T_b]                      # (1, T_b, d)
+        f_b = f[b : b + 1, :T_b]  # (1, T_b, d)
         hyp = torch.tensor([[sos_id]], dtype=torch.long, device=device)
         out_tokens: list[int] = []
 
         for t in range(T_b):
-            f_t = f_b[:, t:t + 1, :]
+            f_t = f_b[:, t : t + 1, :]
             for _ in range(max_symbols_per_step):
                 g = model.predictor(hyp)
-                logit = model.joint(f_t, g[:, -1:, :])   # (1,1,1,V+1)
+                logit = model.joint(f_t, g[:, -1:, :])  # (1,1,1,V+1)
                 pred = int(logit.argmax(dim=-1).item())
 
                 if pred == blank_id:
                     break
-                
+
                 out_tokens.append(pred)
                 hyp = torch.cat(
                     [hyp, torch.tensor([[pred]], dtype=torch.long, device=device)],
@@ -188,223 +214,322 @@ def greedy_decode_batch(
     return all_hyps
 
 
+from torch.utils.data import Sampler
+import random
+
+
+class LengthBucketBatchSampler:
+    def __init__(self, durations, batch_size, shuffle=True):
+        self.bs = batch_size
+        self.shuffle = shuffle
+        idx_sorted = sorted(range(len(durations)), key=lambda i: durations[i])
+        self.batches = [
+            idx_sorted[i : i + batch_size] for i in range(0, len(idx_sorted), batch_size)
+        ]
+
+    def __iter__(self):
+        order = list(range(len(self.batches)))
+        if self.shuffle:
+            random.shuffle(order)
+        for i in order:
+            yield self.batches[i]
+
+    def __len__(self):
+        return len(self.batches)
+
 
 # Eval (loss + WER)
 
+
 @torch.no_grad()
 def evaluate(
-        model: ConformerTransducer,
-        loader: DataLoader,
-        tokenizer: Tokenizer,
-        device: torch.device,
-        max_symbols_per_step: int = 5
-    ) -> dict:
+    model: ConformerTransducer,
+    loader: DataLoader,
+    tokenizer: Tokenizer,
+    device: torch.device,
+    max_symbols_per_step: int = 5,
+) -> dict:
     model.eval()
     total_loss = 0.0
     total_samples = 0
     refs: list[str] = []
     hyps: list[str] = []
 
-    for batch in loader:
-        audio  = batch['audio_features'].to(device)
-        labels = batch['label_tokens'].to(device)
-        targets = batch['targets'].to(device)
-        logit_lengths  = batch['logit_lengths'].to(device)
-        target_lengths = batch['target_lengths'].to(device)
+    for batch in tqdm(loader, desc='walidacja', dynamic_ncols=True, ascii=True):
+        audio = batch["audio_features"].to(device)
+        labels = batch["label_tokens"].to(device)
+        targets = batch["targets"].to(device)
+        logit_lengths = batch["logit_lengths"].to(device)
+        target_lengths = batch["target_lengths"].to(device)
 
         logits = model(audio, labels)
         loss = rnnt_loss(logits.float(), targets, logit_lengths, target_lengths, blank=0)
+        # loss = rnnt_loss(logits, targets, logit_lengths, target_lengths, blank=0)
         bs = audio.size(0)
-        total_loss   += loss.item() * bs
+        total_loss += loss.item() * bs
         total_samples += bs
 
         # Greedy decode + WER
         hyp_ids = greedy_decode_batch(
-            model, audio, logit_lengths,
+            model,
+            audio,
+            logit_lengths,
             max_symbols_per_step=max_symbols_per_step,
         )
 
         for i in range(bs):
-            ref_ids = targets[i, :int(target_lengths[i])].tolist()
+            ref_ids = targets[i, : int(target_lengths[i])].tolist()
             refs.append(tokenizer.decode(ref_ids))
             hyps.append(tokenizer.decode(hyp_ids[i]))
 
     return {
-        'loss': total_loss / max(1, total_samples),
-        'wer' : compute_wer(refs, hyps),
-        'examples': list(zip(refs[:3], hyps[:3])),
+        "loss": total_loss / max(1, total_samples),
+        "wer": compute_wer(refs, hyps),
+        "examples": list(zip(refs[:3], hyps[:3])),
     }
 
 
 # Checkpoint save
 
-def save_ckpt(path: Path, *, model, optimizer, scheduler, scaler,
-              step: int, epoch: int, best_wer: float, cfg: TrainConfig) -> None:
+
+def save_ckpt(
+    path: Path,
+    *,
+    model,
+    optimizer,
+    scheduler,
+    scaler,
+    step: int,
+    epoch: int,
+    best_wer: float,
+    cfg: TrainConfig,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({
-        'model'      : model.state_dict(),
-        'optimizer'  : optimizer.state_dict(),
-        'scheduler'  : scheduler.state_dict(),
-        'scaler'     : scaler.state_dict() if scaler is not None else None,
-        'step'       : step,
-        'epoch'      : epoch,
-        'best_wer'   : best_wer,
-        'cfg'        : cfg.__dict__,
-    }, path)
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "scaler": scaler.state_dict() if scaler is not None else None,
+            "step": step,
+            "epoch": epoch,
+            "best_wer": best_wer,
+            "cfg": cfg.__dict__,
+        },
+        path,
+    )
 
 
-def load_ckpt(path: Path, *, model, optimizer=None, scheduler=None, scaler=None,
-              map_location='cpu') -> dict:
+def load_ckpt(
+    path: Path, *, model, optimizer=None, scheduler=None, scaler=None, map_location="cpu"
+) -> dict:
     state = torch.load(path, map_location=map_location)
-    model.load_state_dict(state['model'])
-    if optimizer is not None and 'optimizer' in state:
-        optimizer.load_state_dict(state['optimizer'])
-    if scheduler is not None and 'scheduler' in state:
-        scheduler.load_state_dict(state['scheduler'])
-    if scaler is not None and state.get('scaler') is not None:
-        scaler.load_state_dict(state['scaler'])
+    model.load_state_dict(state["model"])
+    if optimizer is not None and "optimizer" in state:
+        optimizer.load_state_dict(state["optimizer"])
+    if scheduler is not None and "scheduler" in state:
+        scheduler.load_state_dict(state["scheduler"])
+    if scaler is not None and state.get("scaler") is not None:
+        scaler.load_state_dict(state["scaler"])
     return state
 
 
 def _cleanup_old_ckpts(ckpt_dir: Path, keep: int) -> None:
-    snaps = sorted(ckpt_dir.glob('epoch_*.pt'),
-                   key=lambda p: int(p.stem.split('_')[1]))
+    snaps = sorted(ckpt_dir.glob("epoch_*.pt"), key=lambda p: int(p.stem.split("_")[1]))
     for old in snaps[:-keep]:
         old.unlink(missing_ok=True)
 
 
-
 # Traning loop
 def train(
-        model: ConformerTransducer,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
-        tokenizer: Tokenizer,
-        cfg: TrainConfig,
-        device: torch.device | None = None
-    ) -> None:
+    model: ConformerTransducer,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    tokenizer: Tokenizer,
+    cfg: TrainConfig,
+    device: torch.device | None = None,
+) -> None:
 
-    device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
     torch.manual_seed(cfg.seed)
-    if device.type == 'cuda':
+    if device.type == "cuda":
         torch.cuda.manual_seed_all(cfg.seed)
 
     # --- Optimizer: weight decay tylko na "tlustych" parametrach ---
     decay, no_decay = [], []
     for n, p in model.named_parameters():
-        if not p.requires_grad: continue
-        if p.ndim < 2 or n.endswith('.bias') or 'norm' in n.lower() or 'embed' in n.lower():
+        if not p.requires_grad:
+            continue
+        if p.ndim < 2 or n.endswith(".bias") or "norm" in n.lower() or "embed" in n.lower():
             no_decay.append(p)
         else:
             decay.append(p)
     optimizer = AdamW(
-        [{'params': decay,    'weight_decay': cfg.weight_decay},
-         {'params': no_decay, 'weight_decay': 0.0}],
-        lr=cfg.peak_lr, betas=cfg.betas, eps=cfg.eps,
+        [
+            {"params": decay, "weight_decay": cfg.weight_decay},
+            {"params": no_decay, "weight_decay": 0.0},
+        ],
+        lr=cfg.peak_lr,
+        betas=cfg.betas,
+        eps=cfg.eps,
     )
     scheduler = make_noam_scheduler(optimizer, cfg.warmup_steps)
 
     # --- AMP ---
     amp_dtype = _DTYPES[cfg.amp_dtype]
-    use_amp = cfg.use_amp and device.type == 'cuda' and amp_dtype != torch.float32
+    use_amp = cfg.use_amp and device.type == "cuda" and amp_dtype != torch.float32
     # GradScaler tylko dla fp16; bf16 ma zakres wykladnika fp32, wiec niepotrzebny
-    scaler = torch.amp.GradScaler('cuda', enabled=(use_amp and amp_dtype == torch.float16))
+    scaler = torch.amp.GradScaler("cuda", enabled=(use_amp and amp_dtype == torch.float16))
 
     ckpt_dir = Path(cfg.ckpt_dir)
-    best_wer = float('inf')
+    best_wer = float("inf")
     global_step = 0
     t0 = time.time()
 
-    for epoch in range(cfg.max_epochs):
-        t0_epoch = time.time()
-        model.train()
-        running_loss = 0.0
-        running_n    = 0
-        optimizer.zero_grad(set_to_none=True)
+    file_console_logger.info("Trening...")
+    try:
+        for epoch in range(cfg.max_epochs):
+            t0_epoch = time.time()
+            model.train()
+            running_loss = 0.0
+            running_n = 0
+            optimizer.zero_grad(set_to_none=True)
 
-        for batch_idx, batch in enumerate(train_loader):
-            audio  = batch['audio_features'].to(device, non_blocking=True)
-            labels = batch['label_tokens'].to(device, non_blocking=True)
-            targets   = batch['targets'].to(device, non_blocking=True)
-            logit_lengths  = batch['logit_lengths'].to(device, non_blocking=True)
-            target_lengths = batch['target_lengths'].to(device, non_blocking=True)
+            # for batch_idx, batch in enumerate(tqdm(train_loader)):
+            for batch_idx, batch in enumerate(
+                pbar := tqdm(train_loader, dynamic_ncols=True, ascii=True)
+            ):
+                audio = batch["audio_features"].to(device, non_blocking=True)
+                labels = batch["label_tokens"].to(device, non_blocking=True)
+                targets = batch["targets"].to(device, non_blocking=True)
+                logit_lengths = batch["logit_lengths"].to(device, non_blocking=True)
+                target_lengths = batch["target_lengths"].to(device, non_blocking=True)
 
-            # Forward w AMP, loss zawsze w fp32
-            with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
-                logits = model(audio, labels)
-            loss = rnnt_loss(
-                logits.float(), targets, logit_lengths, target_lengths, blank=0,
-            )
+                # Forward w AMP, loss zawsze w fp32
+                with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
+                    logits = model(audio, labels)
+                loss = rnnt_loss(
+                    logits.float(),
+                    targets,
+                    logit_lengths,
+                    target_lengths,
+                    blank=0,
+                )
 
-            if not torch.isfinite(loss):
-                # Skip step ale nie zerujemy stanu -- czesto efekt pojedynczego skoku
-                print(f"[step {global_step}] loss={loss.item()} -- pomijam batch")
-                optimizer.zero_grad(set_to_none=True)
-                continue
+                running_loss += loss.item() * audio.size(0)
+                running_n += audio.size(0)
+                avg = running_loss / max(1, running_n)
+                lr = scheduler.get_last_lr()[0]
 
-            scaler.scale(loss / cfg.accum_grad).backward()
+                pbar.set_description(f"[epka {epoch:3d} | step {global_step:7d}] | loss={avg:.4f}")
 
-            running_loss += loss.item() * audio.size(0)
-            running_n    += audio.size(0)
+                if not torch.isfinite(loss):
+                    # Skip step ale nie zerujemy stanu -- czesto efekt pojedynczego skoku
+                    file_console_logger.info(
+                        f"[step {global_step}] loss={loss.item()} -- pomijam batch"
+                    )
+                    optimizer.zero_grad(set_to_none=True)
+                    continue
 
-            if (batch_idx + 1) % cfg.accum_grad == 0:
-                scaler.unscale_(optimizer)
-                grad_norm = nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
-                scaler.step(optimizer)
-                scaler.update()
-                scheduler.step()
-                optimizer.zero_grad(set_to_none=True)
-                global_step += 1
+                scaler.scale(loss / cfg.accum_grad).backward()
 
-                if global_step % cfg.log_every == 0:
-                    lr = scheduler.get_last_lr()[0]
-                    avg = running_loss / max(1, running_n)
-                    elapsed = time.time() - t0
-                    epoch_time = time.time() - t0_epoch
-                    print(
-                        f"[ep {epoch:3d} | step {global_step:7d}] "
-                        f"loss={avg:.4f}  lr={lr:.2e}  "
-                        f"|grad|={float(grad_norm):.2f}  "
-                        f"global time={elapsed/60:.1f}m"
-                        f"epoch time={epoch_time}"       
+                running_loss += loss.item() * audio.size(0)
+                running_n += audio.size(0)
+
+                if (batch_idx + 1) % cfg.accum_grad == 0:
+                    scaler.unscale_(optimizer)
+                    grad_norm = nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
+                    scaler.step(optimizer)
+                    scaler.update()
+                    scheduler.step()
+                    optimizer.zero_grad(set_to_none=True)
+                    global_step += 1
+
+                    if global_step % cfg.log_every == 0:
+                        lr = scheduler.get_last_lr()[0]
+                        avg = running_loss / max(1, running_n)
+                        elapsed = time.time() - t0
+                        epoch_time = time.time() - t0_epoch
+                        file_logger.info(
+                            f"[ep {epoch:3d} | step {global_step:7d}] "
+                            f"loss={avg:.4f}  lr={lr:.2e}  "
+                            f"|grad|={float(grad_norm):.2f}  "
+                            f"global time={elapsed/60:.1f}m"
+                            f"epoch time={epoch_time}"
+                        )
+
+            file_console_logger.info("Walidacja...")
+
+            if (epoch + 1) % cfg.eval_every_epochs == 0:
+                metrics = evaluate(
+                    model, val_loader, tokenizer, device, max_symbols_per_step=cfg.max_symbols_per_step
+                )
+                file_console_logger.info(f"[epka {epoch:3d}] val_loss={metrics['loss']:.4f}  ")
+                file_console_logger.info(f"val_WER={metrics['wer']:.2%}")
+                for ref, hyp in metrics["examples"]:
+                    file_console_logger.info(f"REF: {ref!r}")
+                    file_console_logger.info(f"HYP: {hyp!r}")
+
+                # Best checkpoint
+                if metrics["wer"] < best_wer:
+                    best_wer = metrics["wer"]
+                    save_ckpt(
+                        ckpt_dir / "best.pt",
+                        model=model,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                        scaler=scaler,
+                        step=global_step,
+                        epoch=epoch,
+                        best_wer=best_wer,
+                        cfg=cfg,
+                    )
+                    file_console_logger.info(
+                        f"    -> nowy zajebisty WER = {best_wer:.2%}, zapisuje zajebisty ckpt best.pt"
                     )
 
+                # Last N checkpoints
+                save_ckpt(
+                    ckpt_dir / f"epoch_{epoch:04d}.pt",
+                    model=model,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    scaler=scaler,
+                    step=global_step,
+                    epoch=epoch,
+                    best_wer=best_wer,
+                    cfg=cfg,
+                )
+                _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
+
+        file_console_logger.info(f"\nnajzajebistrzy WER = {best_wer:.2%}")
+    except Exception as e:
+        file_console_logger.error(e)
+
         # --- Eval ---
-        if (epoch + 1) % cfg.eval_every_epochs == 0:
-            metrics = evaluate(model, val_loader, tokenizer, device,
-                               max_symbols_per_step=cfg.max_symbols_per_step)
-            print(f"[ep {epoch:3d}] val_loss={metrics['loss']:.4f}  "
-                  f"val_WER={metrics['wer']:.2%}")
-            for ref, hyp in metrics['examples']:
-                print(f"    REF: {ref!r}")
-                print(f"    HYP: {hyp!r}")
-
-            # Best checkpoint
-            if metrics['wer'] < best_wer:
-                best_wer = metrics['wer']
-                save_ckpt(ckpt_dir / 'best.pt',
-                          model=model, optimizer=optimizer, scheduler=scheduler,
-                          scaler=scaler, step=global_step, epoch=epoch,
-                          best_wer=best_wer, cfg=cfg)
-                print(f"    -> nowy best WER = {best_wer:.2%}, zapisano best.pt")
-
-        # Last N checkpoints
-        save_ckpt(ckpt_dir / f'epoch_{epoch:04d}.pt',
-                  model=model, optimizer=optimizer, scheduler=scheduler,
-                  scaler=scaler, step=global_step, epoch=epoch,
-                  best_wer=best_wer, cfg=cfg)
-        _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
-
-    print(f"\nTrening zakonczony. best WER = {best_wer:.2%}")
+        # file_console_logger.info("Starting validation...")
+    print('tu')
 
 
-if __name__ == '__main__':
-    #in = input(f"Dawaj oś kurwa")
+
+def load_config(config_path: str) -> Dict:
+    with open(config_path) as cf:
+        config_file = yaml.safe_load(cf)
+    return config_file
 
 
-    
+@click.command()
+@click.argument("config_path")
+def main(config_path: str):
+    config = load_config(config_path)
+
+    epochs = config["training"]["epochs"]
+    batch_size = config["training"]["batch_size"]
+    train_manifest_path = config["training"]["train_manifest_path"]
+    val_manifest_path = config["training"]["val_manifest_path"]
+    n_workers = config["training"]["n_workers"]
 
     # 1) Mini-manifest z dwoma "utterance'ami" (sinusy zamiast mowy)
     # tmp = Path(tempfile.mkdtemp())
@@ -418,36 +543,38 @@ if __name__ == '__main__':
     #     sf.write(p, wav, sr)
     #     paths.append(p)
 
-    #transcripts = ["ala ma kota", "kot ma ale", "ola pije sok", "kawa jest gorzka"]
-    #train_manifest = tmp / "train_mainfest.jsonl"
-    #val_manifest   = tmp / "val_manifest.jsonl"
-    
-    #batch_size = 32
-    batch_size = 8
-    train_manifest = "train_manifest_22k_plPL.jsonl"
-    val_manifest   = "val_manifest_plPL_test.jsonl"
-    #train_manifest = "train_mainfest_test.json"
-    #val_manifest  =  "val_manifest_test.jsonl"
+    # transcripts = ["ala ma kota", "kot ma ale", "ola pije sok", "kawa jest gorzka"]
+    # train_manifest = tmp / "train_mainfest.jsonl"
+    # val_manifest   = tmp / "val_manifest.jsonl"
+    t = time.time()
+    # batch_size = 32
+
+    # google colab paths
+    # train_manifest = "/content/cv-corpus-25.0-2026-03-09-pl/train_manifest.jsonl"
+    # val_manifest   = "/content/cv-corpus-25.0-2026-03-09-pl/val_manifest_smol.jsonl"
+
+    # local paths
+    # train_manifest = "D:\\kod\\src\\asr_pytorch_local\\train_manifest_22k_plPL.jsonl"
+    # val_manifest  =  "D:\\kod\\src\\asr_pytorch_local\\val_manifest_9K_plPL.json"
     root = Path("path/to/parent")
     pattern = re.compile(r"^experiment_\d+$")
 
-    #print(torch.cuda.is_available())
-    print(f"CUDA devices: {torch.cuda.device_count()}")
-    #print(torch.cuda.current_device())
-    #print(torch.cuda.device(0))
-    print(torch.cuda.get_device_name(torch.cuda.device_count()-1))
+    # file_console_logger.info(torch.cuda.is_available())
+    file_console_logger.info(f"CUDA diwajses: {torch.cuda.device_count()}")
+    # file_console_logger.info(torch.cuda.current_device())
+    # file_console_logger.info(torch.cuda.device(0))
+    file_console_logger.info(f"{torch.cuda.get_device_name(torch.cuda.device_count()-1)}")
 
-    #with open('config.yaml', 'r') as file:
+    # with open('config.yaml', 'r') as file:
     #    config = yaml.safe_load(file)
 
-    #count = sum(1 for p in root.iterdir() if p.is_dir() and pattern.match(p.name))
-    #print(count)
+    # count = sum(1 for p in root.iterdir() if p.is_dir() and pattern.match(p.name))
+    # print(count)
 
-
-    #with open(train_manifest, 'w') as f:
+    # with open(train_manifest, 'w') as f:
     #    for p, txt, dur in zip(paths, transcripts, [1.5, 2.3, 1.8, 2.0]):
     #        f.write(json.dumps({"audio_path": str(p), "duration": dur, "text": txt}) + "\n")
-    #with open(val_manifest, 'w') as f:
+    # with open(val_manifest, 'w') as f:
     #    for p, txt, dur in zip(paths[:2], transcripts[:2], [1.5, 2.3]):
     #        f.write(json.dumps({"audio_path": str(p), "duration": dur, "text": txt}) + "\n")
 
@@ -455,32 +582,80 @@ if __name__ == '__main__':
     tokenizer = CharTokenizer(alphabet="abcdefghijklmnoprstuwxyzqvąćęłńóśźż ")
 
     # 3) Datasety + loadery
-    train_ds = ASRDataset(train_manifest, tokenizer, augment=True)
-    val_ds   = ASRDataset(val_manifest,   tokenizer, augment=False)
-    #train_ds.precompute_features("train_manifest_22k_plPL.jsonl", "features_cache/")
-    collate  = make_collate_fn(blank_id=0)
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  collate_fn=collate)
-    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, collate_fn=collate)
+    train_ds = ASRDataset(train_manifest_path, tokenizer, augment=True, max_duration=10)
+    val_ds = ASRDataset(val_manifest_path, tokenizer, augment=False, max_duration=10)
+    # train_ds.precompute_features("train_manifest_22k_plPL.jsonl", "features_cache/")
+    collate = make_collate_fn(blank_id=0)
 
-    # Smol
-    model = ConformerTransducer(
-        vocab_size=tokenizer.vocab_size,
-        n_mels=80,
-        enc_layers=2, enc_dim=64, enc_heads=4, enc_kernel=15,
-        pred_layers=1, pred_dim=64, pred_heads=4, pred_kernel=7,
-        joint_dim=128, dropout=0.1,
+    # train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  collate_fn=collate)
+    train_bucket_sampler = LengthBucketBatchSampler(
+        train_ds.durations,
+        batch_size=batch_size,
+        shuffle=True,
     )
+    val_bucket_sampler = LengthBucketBatchSampler(
+        val_ds.durations, batch_size=batch_size, shuffle=False,
+    )
+
+    train_loader = DataLoader(
+        train_ds,
+        batch_sampler=train_bucket_sampler,
+        num_workers=n_workers,
+        collate_fn=collate,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_sampler=val_bucket_sampler,
+        num_workers=n_workers,
+        collate_fn=collate,
+        pin_memory=True,
+    )
+    #val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate)
+
+    cfg = TrainConfig(
+        peak_lr=1e-3,
+        warmup_steps=15000,
+        max_epochs=epochs,
+        batch_size=batch_size,
+        num_workers=n_workers,  # big
+        # max_epochs=50, batch_size=batch_size, num_workers=0, # smol
+        use_amp=True,
+        amp_dtype="bf16",
+        #log_every=len(train_loader) + 1,
+        log_every=len(train_loader) + 1,
+        eval_every_epochs=1,
+        ckpt_dir=f"checkpoints/conformer_m/experiment_{t}",
+        max_symbols_per_step=3,
+        weight_decay=1e-6,
+        grad_clip=1.0,
+    )
+    # Smol
+    # model = ConformerTransducer(
+    #     vocab_size=tokenizer.vocab_size,
+    #     n_mels=80,
+    #     enc_layers=2, enc_dim=64, enc_heads=4, enc_kernel=15,
+    #     pred_layers=1, pred_dim=64, pred_heads=4, pred_kernel=7,
+    #     joint_dim=128, dropout=0.1,
+    # )
 
     # Medium model
     # 1) pred_layers = 2/4
-    # 2) 
-    #model = ConformerTransducer(
-    #    vocab_size=tokenizer.vocab_size,
-    #    n_mels=80,
-    #    enc_layers=16, enc_dim=256, enc_heads=4, enc_kernel=31, # encoeder
-    #    pred_layers=1, pred_dim=320, pred_heads=4, pred_kernel=15, # decoder
-    #    joint_dim=320, dropout=0.1,
-    #)
+    # 2)
+    model = ConformerTransducer(
+        vocab_size=tokenizer.vocab_size,
+        n_mels=80,
+        enc_layers=16,
+        enc_dim=256,
+        enc_heads=4,
+        enc_kernel=31,  # encoeder
+        pred_layers=1,
+        pred_dim=320,
+        pred_heads=4,
+        pred_kernel=15,  # decoder
+        joint_dim=320,
+        dropout=0.1,
+    )
 
     # Big mf model
     # model = ConformerTransducer(
@@ -491,9 +666,9 @@ if __name__ == '__main__':
     #     joint_dim=640, dropout=0.1,
     # )
 
-    #print(f"model params: {sum(p.numel() for p in model.parameters()):,}")
-    #summary(model, input_size=(2))
-    #print(train_ds)
+    # print(f"model params: {sum(p.numel() for p in model.parameters()):,}")
+    # summary(model, input_size=(2))
+    # print(train_ds)
 
     # 5) Smoke test treningu (2 epoki, krotkie)
     # cfg = TrainConfig(
@@ -504,20 +679,15 @@ if __name__ == '__main__':
     #     ckpt_dir=str(tmp / 'ckpts'),
     #     max_symbols_per_step=3,
     # )
-    t = time.time()
-
-    cfg = TrainConfig(
-        peak_lr=1e-3, warmup_steps=15000,
-        #max_epochs=100, batch_size=batch_size, num_workers=8, # big
-        max_epochs=2, batch_size=batch_size, num_workers=2, # smol
-        use_amp=True, amp_dtype='bf16',
-        log_every=50, eval_every_epochs=1,
-        ckpt_dir=f'checkpoints/conformer_m/experiment_{t}',
-        max_symbols_per_step=3,
-        weight_decay=1e-6, grad_clip=1.0,
-    )
 
     try:
         train(model, train_loader, val_loader, tokenizer, cfg)
     except (ImportError, ModuleNotFoundError) as e:
-        print(f"Smoke test pominiety: {e}  (zainstaluj torchaudio do treningu)")
+        file_console_logger.exception(
+            f"Smoke test pominiety: {e}  (zainstaluj torchaudio do treningu)"
+        )
+
+
+if __name__ == "__main__":
+    # in = input(f"Dawaj oś kurwa")
+    main()

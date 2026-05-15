@@ -260,18 +260,21 @@ class JointNetwork(nn.Module):
         self.proj_pred = nn.Linear(pred_dim, joint_dim)
         self.out       = nn.Linear(joint_dim, vocab_size + 1)   # +1 = blank
 
-    def forward(self, f, g, chunk: int = 16):
-        # f: (B, T, d_enc), g: (B, U+1, d_pred)
-        fe = self.proj_enc(f)                       # (B, T, J)
-        gp = self.proj_pred(g).unsqueeze(1)         # (B, 1, U+1, J)
-        B, T, J = fe.shape
-        outs = []
-        for t0 in range(0, T, chunk):
-            f_c = fe[:, t0:t0+chunk].unsqueeze(2)   # (B, c, 1, J)
-            outs.append(self.out(torch.tanh(f_c + gp)))
-        return torch.cat(outs, dim=1)
+    # def forward(self, f, g, chunk: int = 16):
+    #     # f: (B, T, d_enc), g: (B, U+1, d_pred)
+    #     fe = self.proj_enc(f)                       # (B, T, J)
+    #     gp = self.proj_pred(g).unsqueeze(1)         # (B, 1, U+1, J)
+    #     B, T, J = fe.shape
+    #     outs = []
+    #     for t0 in range(0, T, chunk):
+    #         f_c = fe[:, t0:t0+chunk].unsqueeze(2)   # (B, c, 1, J)
+    #         outs.append(self.out(torch.tanh(f_c + gp)))
+    #     return torch.cat(outs, dim=1)
 
-
+    def forward(self, f, g):
+        fe = self.proj_enc(f).unsqueeze(2)              # (B, T, 1, J)
+        gp = self.proj_pred(g).unsqueeze(1)             # (B, 1, U+1, J)
+        return self.out(torch.tanh(fe + gp))            # (B, T, U+1, V+1)
 # =========================================================================
 # Pelny model
 # =========================================================================
