@@ -1,0 +1,36 @@
+# Szybki debug na malym wycinku danych:
+#   python train.py configs/config_local_debug.yaml --model_size smol --device cpu
+
+data:
+  train_manifest_path: ~/datasets/cv_pl/train_manifest_debug.jsonl
+  val_manifest_path: ~/datasets/cv_pl/val_manifest_debug.jsonl
+  max_audio_len: 8.0
+  min_audio_len: 0.5
+  feature_cache_dir: null
+
+tokenizer:
+  type: char
+
+model:
+  size: smol
+  dropout: 0.1
+
+training:
+  epochs: 2
+  batch_size: 2
+  n_workers: 0
+  lr: 0.001
+  weight_decay: 0.0001
+  warmup_steps: 100
+  grad_clip: 1.0
+  amp_dtype: fp32
+  ctc_weight: 0.3
+  log_every: 5
+  eval_every_epochs: 1
+  save_every_steps: 50
+  keep_last: 1
+  wer_max_samples: 20
+  compile: false
+  tensorboard: false
+  ckpt_root: checkpoints
+  seed: 42

@@ -1,0 +1,37 @@
+# Smoke test na lokalnym GPU (RTX 5080) -- maly model, 500 sampli, 2 epoki:
+#   python train.py configs/config_local_smoke.yaml
+# Manifesty *_smoke.jsonl maja absolutne sciezki audio (generowane z *_debug.jsonl).
+
+data:
+  train_manifest_path: data/cv-corpus-25.0-2026-03-09-pl/train_manifest_smoke.jsonl
+  val_manifest_path: data/cv-corpus-25.0-2026-03-09-pl/val_manifest_smoke.jsonl
+  max_audio_len: 8.0
+  min_audio_len: 0.5
+  feature_cache_dir: null
+
+tokenizer:
+  type: char
+
+model:
+  size: smol
+  dropout: 0.1
+
+training:
+  epochs: 2
+  batch_size: 8
+  n_workers: 4
+  lr: 0.001
+  weight_decay: 0.000001
+  warmup_steps: 100
+  grad_clip: 1.0
+  amp_dtype: bf16
+  ctc_weight: 0.3
+  log_every: 10
+  eval_every_epochs: 1
+  save_every_steps: 0
+  keep_last: 1
+  wer_max_samples: 10
+  compile: false
+  tensorboard: false
+  ckpt_root: checkpoints
+  seed: 42

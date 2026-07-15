@@ -1,0 +1,36 @@
+# Trening na Colabie:
+#   python train.py configs/config_colab.yaml --model_size mid
+
+data:
+  train_manifest_path: /content/cv-corpus-25.0-2026-03-09-pl/train_manifest.jsonl
+  val_manifest_path: /content/cv-corpus-25.0-2026-03-09-pl/val_manifest_smol.jsonl
+  max_audio_len: 10.0
+  min_audio_len: 0.5
+  feature_cache_dir: null
+
+tokenizer:
+  type: char
+
+model:
+  size: mid
+  dropout: 0.1
+
+training:
+  epochs: 50
+  batch_size: 16
+  n_workers: 2
+  lr: 0.001
+  weight_decay: 0.000001
+  warmup_steps: 10000
+  grad_clip: 1.0
+  amp_dtype: fp16              # T4 nie ma bf16; na A100 zmien na bf16
+  ctc_weight: 0.3
+  log_every: 50
+  eval_every_epochs: 1
+  save_every_steps: 1000
+  keep_last: 3
+  wer_max_samples: 500
+  compile: false
+  tensorboard: true
+  ckpt_root: /content/drive/MyDrive/asr_checkpoints   # zapis na Google Drive
+  seed: 42

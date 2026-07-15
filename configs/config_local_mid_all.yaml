@@ -1,0 +1,59 @@
+# Trening lokalny na RTX 5080: mid, pelny miks polskich danych + augmentacja szum/RIR.
+#   python train.py configs/config_local_mid_all.yaml
+#
+# Manifesty *_all.jsonl to sklejka (cat) manifestow zrodlowych:
+#   train: cv_mls + bigos + voxpopuli + yodas
+#   val:   cv_mls + bigos + voxpopuli
+# Zrodla pobiera utils/datasets_conversion/hf2json.py (bigos/voxpopuli/yodas);
+# BIGOS wymaga HF_TOKEN i zaakceptowania warunkow na stronie datasetu.
+# Cechy nowych zrodel dolicza sie do wspolnego cache przy pierwszej epoce
+# (albo z gory: ASRDataset.precompute_features).
+
+data:
+  train_manifest_path: data/train_manifest_all.jsonl
+  val_manifest_path: data/val_manifest_all.jsonl
+  max_audio_len: 20.0
+  min_audio_len: 0.5
+  feature_cache_dir: data/features_cache
+
+tokenizer:
+  type: char
+
+# Szum + RIR na waveformie (OpenSLR 28); augmentowany sample omija cache cech
+augment:
+  noise_dir: data/RIRS_NOISES/pointsource_noises
+  rir_dir: data/RIRS_NOISES/simulated_rirs
+  prob: 0.4          # ulamek sampli train z augmentacja waveformu
+  noise_prob: 0.9    # P(szum | sample augmentowany)
+  rir_prob: 0.5      # P(RIR | sample augmentowany)
+  snr_db: [5, 25]
+
+model:
+  size: mid
+  dropout: 0.1
+
+training:
+  epochs: 30
+  batch_size: 48                 # gorny limit przy dynamicznym batchu
+  max_batch_duration: 160.0      # obnizone z 320: gestsze transkrypty (YODAS
+                                 # spontaniczny) rozdymaja tensor jointa (B,T',U,J)
+                                 # i skrajne batche OOM-owaly VRAM (16.3 GB). Rzadki
+                                 # OOM lapie tez try/except w petli (pomija batch).
+  n_workers: 8
+  lr: 0.001
+  weight_decay: 0.000001
+  warmup_steps: 2000
+  grad_clip: 1.0
+  accum_grad: 1
+  amp_dtype: bf16
+  ctc_weight: 0.3
+  log_every: 50
+  eval_every_epochs: 1
+  save_every_steps: 1000
+  keep_last: 2
+  wer_max_samples: 200
+  max_symbols_per_step: 3
+  compile: false
+  tensorboard: true
+  ckpt_root: checkpoints
+  seed: 42
