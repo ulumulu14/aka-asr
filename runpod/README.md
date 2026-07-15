@@ -16,14 +16,21 @@ p2p, bo `cv2json.py` wymaga surowego korpusu Mozilli.
 
 ## 1. Kod (git)
 
+Repo `ulumulu14/aka-asr` jest **prywatne** -> clone wymaga tokenu z dostepem do
+odczytu (fine-grained z `Contents: Read` na tym repo, albo classic ze scope `repo`).
+
 ```bash
 cd /workspace
-git clone <URL_REPO> aka-asr        # repo prywatne -> URL z tokenem albo deploy key
-cd aka-asr && git checkout feature/logging
+export GH_TOKEN=ghp_...              # token TYLKO do odczytu tego repo
+git clone "https://ulumulu14:${GH_TOKEN}@github.com/ulumulu14/aka-asr.git" aka-asr
+cd aka-asr
+git remote set-url origin https://github.com/ulumulu14/aka-asr.git   # zdejmij token z .git/config
+git checkout main
 ```
-> Uwaga: remote moze jeszcze wskazywac stara nazwe `ulumulu14/asr_pytorch`
-> (po rename GitHub przekierowuje). Nowe pliki runpodowe sa na `feature/logging` --
-> najpierw wypchnij je z lokala: `git push origin feature/logging`.
+> Alternatywa: ustaw repo na **public** w Settings -> wtedy clone bez tokenu
+> (`git clone https://github.com/ulumulu14/aka-asr.git aka-asr`).
+> Na podzie i tak tylko czytasz kod (checkpointy ida na network volume), wiec
+> token do odczytu wystarczy -- nie dawaj tam tokenu z zapisem.
 
 ## 2. Dane (regeneracja)
 
