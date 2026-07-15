@@ -1,9 +1,12 @@
 # aka-asr
 
-Polski ASR Conformer-Transducer (RNN-T), trenowany od zera na Mozilla Common Voice PL
-+ Multilingual LibriSpeech (MLS) Polish.
+Polski ASR Conformer-Transducer (RNN-T), trenowany od zera na miksie polskich
+korpusów: Mozilla Common Voice PL, Multilingual LibriSpeech (MLS) Polish, BIGOS v2
+(Clarin studio/mobile, M-AILABS, FLEURS, korpusy PWR), VoxPopuli PL (Parlament EU)
+oraz YODAS PL (manualne napisy z YouTube) — łącznie ~440 h.
 Architektura: Conformer encoder + causal-Conformer predictor + joint network,
-loss RNN-T (torchaudio) z pomocniczym CTC na encoderze.
+loss RNN-T (torchaudio) z pomocniczym CTC na encoderze. Opcjonalna augmentacja
+waveformu (szum + RIR, OpenSLR 28) — patrz sekcja `augment` w configach.
 
 ## Instalacja
 
@@ -32,7 +35,19 @@ python utils/datasets_conversion/librispeech2json.py /path/to/mls_polish --split
 python utils/datasets_conversion/librispeech2json.py /path/to/mls_polish --split dev
 ```
 
-Manifesty z różnych źródeł można po prostu skonkatenować (`cat a.jsonl b.jsonl > train.jsonl`).
+**BIGOS v2, VoxPopuli, YODAS** (pobierane z Hugging Face; audio zapisywane lokalnie do `data/`):
+
+```bash
+python utils/datasets_conversion/hf2json.py bigos       # gated: wymaga HF_TOKEN + akceptacji warunków datasetu
+python utils/datasets_conversion/hf2json.py voxpopuli
+python utils/datasets_conversion/hf2json.py yodas --shards 10   # --shards ogranicza wolumen (~0.9 GB/shard)
+```
+
+Manifesty lądują w `data/` jako `{train,val}_manifest_<źródło>.jsonl`.
+Manifesty z różnych źródeł można po prostu skonkatenować (`cat a.jsonl b.jsonl > train.jsonl`)
+— tak powstają `train_manifest_all.jsonl` / `val_manifest_all.jsonl` używane w `configs/config_*_all.yaml`.
+Pełną regenerację całego miksu na maszynie treningowej automatyzuje `runpod/bootstrap.sh`
+(patrz `runpod/README.md`).
 
 **Opcjonalnie: cache cech** (mocno przyspiesza DataLoader):
 
