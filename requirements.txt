@@ -1,0 +1,11 @@
+torch>=2.1
+torchaudio>=2.1
+numpy
+click
+pyyaml
+tqdm
+soundfile
+torchinfo
+tensorboard
+# opcjonalnie, dla tokenizera BPE:
+# sentencepiece
