@@ -1,0 +1,63 @@
+# Trening na RunPodzie: mid, pelny miks polskich danych + augmentacja szum/RIR.
+# Odpowiednik configs/config_local_mid_all.yaml, ale sciezki na network volume
+# (/workspace) i budzet batcha podniesiony pod A100 (wiecej VRAM niz 16 GB laptopa).
+#
+#   cd /workspace/aka-asr
+#   python train.py configs/config_runpod_mid_all.yaml
+#   # wznowienie:
+#   python train.py configs/config_runpod_mid_all.yaml --resume /workspace/aka-asr/checkpoints/conformer_mid/<exp>/last.pt
+#
+# Dane regeneruje runpod/bootstrap.sh (bigos/voxpopuli/yodas z HF, mls z OpenSLR,
+# RIRS z OpenSLR); CV dosylane osobno (patrz runpod/README.md). audio_path w
+# manifestach jest ABSOLUTNY (skrypty pisza p.resolve()), wiec musi wskazywac
+# /workspace/aka-asr/data/... -> regeneruj dane wlasnie tam.
+
+data:
+  train_manifest_path: /workspace/aka-asr/data/train_manifest_all.jsonl
+  val_manifest_path: /workspace/aka-asr/data/val_manifest_all.jsonl
+  max_audio_len: 20.0
+  min_audio_len: 0.5
+  feature_cache_dir: /workspace/aka-asr/data/features_cache
+
+tokenizer:
+  type: char
+
+# Szum + RIR na waveformie (OpenSLR 28); augmentowany sample omija cache cech
+augment:
+  noise_dir: /workspace/aka-asr/data/RIRS_NOISES/pointsource_noises
+  rir_dir: /workspace/aka-asr/data/RIRS_NOISES/simulated_rirs
+  prob: 0.4
+  noise_prob: 0.9
+  rir_prob: 0.5
+  snr_db: [5, 25]
+
+model:
+  size: mid            # mid mirroruje trening lokalny; na A100 'big' jest w zasiegu
+                       # (jedna zmiana) i powinien poprawic WER 30% z mid CV+MLS
+  dropout: 0.1
+
+training:
+  epochs: 30
+  batch_size: 64                 # gorny limit przy dynamicznym batchu
+  max_batch_duration: 400.0      # A100-40GB: ~400; A100-80GB: podnies do ~700.
+                                 # Lokalnie bylo 160 (limit 16.3 GB VRAM). Tensor
+                                 # jointa (B,T',U,J) rosnie z budzetem; try/except
+                                 # OOM w petli i tak pomija skrajny batch.
+  n_workers: 12                  # A100 pody maja duzo vCPU; I/O z network volume
+  lr: 0.001
+  weight_decay: 0.000001
+  warmup_steps: 2000
+  grad_clip: 1.0
+  accum_grad: 1
+  amp_dtype: bf16
+  ctc_weight: 0.3
+  log_every: 50
+  eval_every_epochs: 1
+  save_every_steps: 1000
+  keep_last: 3
+  wer_max_samples: 500           # wiecej niz lokalne 200 -- szybki GPU to udzwignie
+  max_symbols_per_step: 3
+  compile: false
+  tensorboard: true
+  ckpt_root: /workspace/aka-asr/checkpoints   # NA NETWORK VOLUME -> przezyje ubicie poda
+  seed: 42

@@ -1,0 +1,41 @@
+# Trening na RunPodzie (A100 / 4090, dane na network volume w /workspace)
+#   python train.py configs/config_runpod.yaml
+#   python train.py configs/config_runpod.yaml --resume /workspace/checkpoints/conformer_mid/<exp>/last.pt
+
+data:
+  train_manifest_path: /workspace/datasets/train_manifest.jsonl
+  val_manifest_path: /workspace/datasets/val_manifest.jsonl
+  max_audio_len: 16.0
+  min_audio_len: 0.5
+  feature_cache_dir: null      # np. /workspace/features_cache (patrz features.py)
+
+tokenizer:
+  type: char                   # char | bpe
+  bpe_model_path: null         # dla bpe: sciezka do .model z utils/train_bpe.py
+
+model:
+  size: mid                 # smol | mid | big
+  dropout: 0.1
+
+training:
+  epochs: 60
+  batch_size: 32
+  max_batch_duration: null     # np. 320.0 -> dynamiczny batch ~320 s audio (batch_size = gorny limit)
+  n_workers: 8
+  lr: 0.001
+  weight_decay: 0.000001
+  warmup_steps: 10000
+  grad_clip: 1.0
+  accum_grad: 1
+  amp_dtype: bf16              # bf16 na Ampere+ (A100/4090); fp16 na T4/V100
+  ctc_weight: 0.3
+  log_every: 50
+  eval_every_epochs: 1
+  save_every_steps: 1000
+  keep_last: 3
+  wer_max_samples: 1000        # WER liczony na podzbiorze walidacji (pelny loss zawsze)
+  max_symbols_per_step: 3
+  compile: false
+  tensorboard: true
+  ckpt_root: /workspace/checkpoints
+  seed: 42
