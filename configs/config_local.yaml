@@ -1,0 +1,36 @@
+# Trening lokalny (CPU albo male GPU) -- dostosuj sciezki do manifestow:
+#   python train.py configs/config_local.yaml --model_size smol --device cpu
+
+data:
+  train_manifest_path: ~/datasets/cv_pl/train_manifest.jsonl
+  val_manifest_path: ~/datasets/cv_pl/val_manifest_smol.jsonl
+  max_audio_len: 8.0
+  min_audio_len: 0.5
+  feature_cache_dir: null
+
+tokenizer:
+  type: char
+
+model:
+  size: smol
+  dropout: 0.1
+
+training:
+  epochs: 10
+  batch_size: 4
+  n_workers: 2
+  lr: 0.0005
+  weight_decay: 0.000001
+  warmup_steps: 1000
+  grad_clip: 1.0
+  amp_dtype: fp32
+  ctc_weight: 0.3
+  log_every: 20
+  eval_every_epochs: 1
+  save_every_steps: 500
+  keep_last: 2
+  wer_max_samples: 200
+  compile: false
+  tensorboard: true
+  ckpt_root: checkpoints
+  seed: 42
