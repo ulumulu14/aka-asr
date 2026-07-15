@@ -1,0 +1,20 @@
+[package]
+name = "asr_demo_app"
+version = "0.3.0"
+edition = "2021"
+description = "Rejestrator dźwięku z transkrypcją Conformer-Transducer (PyTorch przez PyO3)"
+
+[dependencies]
+cpal = "0.15"
+hound = "3.5"
+clap = { version = "4.5", features = ["derive"] }
+ctrlc = "3.4"
+anyhow = "1.0"
+# pyo3 >= 0.26: wsparcie Pythona 3.14 (wersja w .venv repo)
+pyo3 = { version = "0.26", features = ["auto-initialize"] }
+numpy = "0.26"
+ndarray = "0.16"
+
+[profile.release]
+opt-level = 3
+lto = true
