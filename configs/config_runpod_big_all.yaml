@@ -1,0 +1,57 @@
+# Trening na RunPodzie: big (~130M param), pelny miks polskich danych + augmentacja.
+# Odpowiednik config_runpod_mid_all.yaml z model.size=big. Big powinien pobic
+# WER 30% z mid (CV+MLS) -- sens ma dopiero na mocnym GPU (A100).
+#
+#   cd /workspace/aka-asr
+#   python train.py configs/config_runpod_big_all.yaml
+#   python train.py configs/config_runpod_big_all.yaml --resume /workspace/aka-asr/checkpoints/conformer_big/<exp>/last.pt
+#
+# Dane: patrz runpod/README.md (regeneracja bootstrapem, CV dosylany p2p).
+
+data:
+  train_manifest_path: /workspace/aka-asr/data/train_manifest_all.jsonl
+  val_manifest_path: /workspace/aka-asr/data/val_manifest_all.jsonl
+  max_audio_len: 20.0
+  min_audio_len: 0.5
+  feature_cache_dir: /workspace/aka-asr/data/features_cache
+
+tokenizer:
+  type: char
+
+augment:
+  noise_dir: /workspace/aka-asr/data/RIRS_NOISES/pointsource_noises
+  rir_dir: /workspace/aka-asr/data/RIRS_NOISES/simulated_rirs
+  prob: 0.4
+  noise_prob: 0.9
+  rir_prob: 0.5
+  snr_db: [5, 25]
+
+model:
+  size: big
+  dropout: 0.1
+
+training:
+  epochs: 30
+  batch_size: 64
+  max_batch_duration: 320.0      # nizej niz mid (400): glebszy enkoder big to
+                                 # wiecej aktywacji na ramke. A100-40GB: ~320;
+                                 # A100-80GB: podnies do ~600. try/except OOM
+                                 # w petli i tak pomija skrajny batch.
+  n_workers: 12
+  lr: 0.001
+  weight_decay: 0.000001
+  warmup_steps: 2000
+  grad_clip: 1.0
+  accum_grad: 1
+  amp_dtype: bf16
+  ctc_weight: 0.3
+  log_every: 50
+  eval_every_epochs: 1
+  save_every_steps: 1000
+  keep_last: 3
+  wer_max_samples: 500
+  max_symbols_per_step: 3
+  compile: false
+  tensorboard: true
+  ckpt_root: /workspace/aka-asr/checkpoints
+  seed: 42
