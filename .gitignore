@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logi i artefakty treningu
+*.log
+checkpoints/
+features_cache/
+runs/
+*.pt
+*.npy
+
+# Datasety i audio (pobierane/generowane, nie do repo)
+/data/
+
+# Tokenizery BPE
+*.model
+*.vocab
+
+# WSL/Windows
+*:Zone.Identifier
+
+# Demo app (Rust)
+asr_demo_app/target/
+asr_demo_app/*.exe
+asr_demo_app/recordings/
+asr_demo_app/*.wav
+
+# Claude Code (osobiste)
+.claude/settings.local.json
