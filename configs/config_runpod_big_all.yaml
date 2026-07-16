@@ -32,15 +32,19 @@ model:
 
 training:
   epochs: 30
-  batch_size: 64
-  max_batch_duration: 320.0      # nizej niz mid (400): glebszy enkoder big to
-                                 # wiecej aktywacji na ramke. A100-40GB: ~320;
-                                 # A100-80GB: podnies do ~600. try/except OOM
-                                 # w petli i tak pomija skrajny batch.
+  batch_size: 128                # gorny limit przy dynamicznym batchu; przy 450 s
+                                 # budzetu batch krotkich klipow CV (~4-5 s) to
+                                 # ~100 sampli, wiec 64 by ucinalo przed budzetem
+  max_batch_duration: 450.0      # H100/A100 80GB. big je ~2x VRAM/s wzgledem mid:
+                                 # joint_dim 320->640 podwaja tensor jointa
+                                 # (B,T',U,J), enc_dim 256->512 podwaja aktywacje
+                                 # enkodera; mid mial 400 na 40GB -> big 200 na
+                                 # 40GB, ~450 na 80GB. try/except OOM w petli
+                                 # i tak pomija skrajny batch.
   n_workers: 12
-  lr: 0.001
+  lr: 0.0007                     # peak Noama; mid mial 1e-3, wiekszy model -> ~1/sqrt(d_model/256)
   weight_decay: 0.000001
-  warmup_steps: 2000
+  warmup_steps: 4000             # dluzej niz mid (2000): stabilniejszy start 130M param
   grad_clip: 1.0
   accum_grad: 1
   amp_dtype: bf16
