@@ -18,6 +18,8 @@ runs/
 # Tokenizery BPE
 *.model
 *.vocab
+# wyjatek: kanoniczny tokenizer BPE w repo (dojezdza na pod przez git)
+!bpe_pl.model
 
 # WSL/Windows
 *:Zone.Identifier

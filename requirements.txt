@@ -7,5 +7,5 @@ tqdm
 soundfile
 torchinfo
 tensorboard
-# opcjonalnie, dla tokenizera BPE:
-# sentencepiece
+# tokenizer BPE (configs/*_bpe.yaml):
+sentencepiece
