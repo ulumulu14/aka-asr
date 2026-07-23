@@ -47,7 +47,7 @@ python utils/datasets_conversion/hf2json.py yodas --shards 10   # --shards ogran
 Manifesty lądują w `data/` jako `{train,val}_manifest_<źródło>.jsonl`.
 Manifesty z różnych źródeł można po prostu skonkatenować (`cat a.jsonl b.jsonl > train.jsonl`)
 - tak powstają `train_manifest_all.jsonl` / `val_manifest_all.jsonl` używane w `configs/config_*_all.yaml`.
-Pełną regenerację całego miksu na maszynie treningowej automatyzuje `runpod/bootstrap.sh`
+Odtworzenie miksu datasetów: `runpod/bootstrap.sh`
 (patrz `runpod/README.md`).
 
 **Opcjonalnie: cache cech** (mocno przyspiesza DataLoader):
