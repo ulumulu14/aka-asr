@@ -84,8 +84,17 @@ if [ ! -d "$DATA_DIR/RIRS_NOISES" ]; then
 else log "RIRS_NOISES -- istnieje, pomijam"; fi
 
 # --- 5. CV (dosylany z lokala) ---------------------------------------------
-# Oczekiwane: $DATA_DIR/train_manifest_cv.jsonl i val_manifest_cv.jsonl z audio_path
-# wskazujacym na /workspace/aka-asr/data/cv-corpus-.../wav/... (patrz README, remap sed).
+# Oczekiwane: zip korpusu (cv-corpus-*.zip) odebrany do $DATA_DIR + manifesty
+# train_manifest_cv.jsonl / val_manifest_cv.jsonl z audio_path na /workspace/...
+# (patrz README, remap sed). Zip rozpakowujemy tutaj i kasujemy po sukcesie.
+CV_ZIP=$(ls "$DATA_DIR"/cv-corpus-*.zip 2>/dev/null | head -1 || true)
+if [ -n "$CV_ZIP" ]; then
+  log "CV -- rozpakowuje $(basename "$CV_ZIP") (bez smieci WSL *Zone.Identifier)"
+  # -o: po przerwanym rozpakowaniu ponowny run nadpisze czesciowe pliki;
+  # przy blednym zipie unzip zwraca !=0 -> set -e przerywa PRZED rm
+  unzip -q -o "$CV_ZIP" -d "$DATA_DIR" -x '*Zone.Identifier'
+  rm -f "$CV_ZIP"
+fi
 if [ ! -f "$DATA_DIR/train_manifest_cv.jsonl" ]; then
   echo "!! Brak $DATA_DIR/train_manifest_cv.jsonl -- CV nie zostal dostarczony."
   echo "   Manifest ALL powstanie BEZ CV. Dosli CV wg runpod/README.md i uruchom ponownie."

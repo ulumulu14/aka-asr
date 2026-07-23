@@ -51,16 +51,22 @@ sed 's|/home/arekk/workspace/aka-asr/data|/workspace/aka-asr/data|g' \
 sed 's|/home/arekk/workspace/aka-asr/data|/workspace/aka-asr/data|g' \
   <(grep cv-corpus data/val_manifest_all.jsonl)   > /tmp/val_manifest_cv.jsonl
 
-runpodctl send data/cv-corpus-25.0-2026-03-09-pl          # ~5.7 GB, wypisze kod
+# UWAGA: `runpodctl send <katalog>` najpierw pakuje katalog do zipa w CWD
+# (zostaje po nim cv-corpus-*.zip). Przy ponownej wysylce slij ISTNIEJACY zip --
+# ponowne pakowanie zmienia bajty i psuje wznowienie/weryfikacje sum:
+runpodctl send cv-corpus-25.0-2026-03-09-pl.zip           # ~5.9 GB, wypisze kod
 runpodctl send /tmp/train_manifest_cv.jsonl /tmp/val_manifest_cv.jsonl
 ```
-Na **podzie** odbierz do `data/` (sciezki musza sie zgadzac z manifestem):
+Na **podzie** odbierz do `data/`:
 ```bash
 cd /workspace/aka-asr/data
-runpodctl receive <kod_katalogu_cv>       # -> data/cv-corpus-25.0-2026-03-09-pl/
+runpodctl receive <kod_zipa>              # -> data/cv-corpus-*.zip
 runpodctl receive <kod_manifestow>        # -> data/{train,val}_manifest_cv.jsonl
-bash /workspace/aka-asr/runpod/bootstrap.sh   # ponownie: doklei CV do *_all.jsonl
+# opcjonalnie: sha256sum zipa vs lokal (transfer p2p bywa kapryzny)
+bash /workspace/aka-asr/runpod/bootstrap.sh   # rozpakuje zip i doklei CV do *_all.jsonl
 ```
+Przy zerwanym transferze duzego zipa: rsync po SSH z `--inplace` (bez `--append`!)
+doszywa tylko brakujace bloki zamiast slac calosc od nowa.
 
 ## 3. Trening
 
