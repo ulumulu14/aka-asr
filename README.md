@@ -80,7 +80,7 @@ python train.py configs/config_runpod.yaml
 python train.py configs/config_runpod.yaml --resume /workspace/checkpoints/conformer_mid/<exp>/last.pt
 ```
 
-Rozmiary modelu: `smol` (debug), `mid` (~30M, domyślny), `big` (`--model_size` albo `model.size` w configu).
+Rozmiary modelu: `smol` (debug), `mid` (~30M parametrów, domyślny), `big` (`--model_size` albo `model.size` w configu).
 
 Metryki: `tensorboard --logdir <ckpt_dir>/tb`. Log tekstowy: `<ckpt_dir>/train.log`.
 
