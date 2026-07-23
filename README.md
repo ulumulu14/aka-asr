@@ -50,7 +50,7 @@ Manifesty z różnych źródeł można po prostu skonkatenować (`cat a.jsonl b.
 Odtworzenie miksu datasetów: `runpod/bootstrap.sh`
 (patrz `runpod/README.md`).
 
-**Opcjonalnie: cache cech** (mocno przyspiesza DataLoader):
+**Opcjonalnie: cache ficzerów** (mocno przyspiesza DataLoader):
 
 ```bash
 python features.py train_manifest.jsonl features_cache/ --workers 8
