@@ -9,7 +9,7 @@
 set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-/workspace/aka-asr}"
-CONFIG="${CONFIG:-configs/config_runpod_mid_all.yaml}"
+CONFIG="${CONFIG:-configs/config_runpod_big_bpe.yaml}"
 LOG="${LOG:-/workspace/aka-asr/train_runpod.log}"
 cd "$REPO_DIR"
 
