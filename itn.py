@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-ITN (inverse text normalization) dla polskiego -- forma mowiona -> pisana.
+ITN (inverse text normalization) dla polskiego: forma mowiona -> pisana.
 
 Zakres V1: liczebniki glowne w mianowniku ("dwa tysiace pietnascie" -> "2015").
 Anty-nadgorliwosc: pojedyncze slowo o wartosci < 10 zostaje slowem ("jeden z nich"
 bez zmian); konwertowane sa frazy >= 2 slow liczbowych albo o wartosci >= 10.
 Formy przypadkow zaleznych (dwoch, pieciu, stu, dwustu...) NIE sa konwertowane.
 
-To warstwa WYSWIETLANIA (demo, UI) -- nie stosowac przy liczeniu WER, bo
+To warstwa WYSWIETLANIA (demo, UI). Nie stosowac przy liczeniu WER, bo
 referencje sa w formie mowionej (dataset odrzuca transkrypcje z cyframi).
 
 Uzycie:  from itn import itn_pl;  itn_pl("dwa tysiące piętnaście")  -> "2015"
