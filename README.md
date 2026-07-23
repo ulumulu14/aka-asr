@@ -1,7 +1,7 @@
 # aka-asr
 
-Polski ASR Conformer-Transducer (RNN-T), trenowany od zera na połączeni polskich
-korpusów: Mozilla Common Voice PL, Multilingual LibriSpeech (MLS) Polish, BIGOS v2
+Polski ASR Conformer-Transducer (RNN-T), trenowany od zera na połączonych polskich
+korpusach: Mozilla Common Voice PL, Multilingual LibriSpeech (MLS) Polish, BIGOS v2
 (Clarin studio/mobile, M-AILABS, FLEURS, korpusy PWR), VoxPopuli PL (Parlament EU)
 oraz YODAS PL — łącznie ~440 h.
 Architektura: Conformer encoder + causal-Conformer predictor + joint network,
