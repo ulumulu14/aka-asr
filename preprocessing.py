@@ -326,6 +326,18 @@ class WaveformAugment:
         return wav
 
 
+def speed_perturb_waveform(wav: torch.Tensor, sample_rate: int, factor: float) -> torch.Tensor:
+    """
+    Perturbacja tempa w stylu Kaldi (sox 'speed'): resampling z przeetykietowanym
+    sample rate. Zmienia tempo I wysokosc; dlugosc wyjscia = T / factor.
+    """
+    if factor == 1.0:
+        return wav
+    return torchaudio.functional.resample(
+        wav, orig_freq=int(round(sample_rate * factor)), new_freq=sample_rate
+    )
+
+
 # Normalizacja tekstu
 
 
@@ -452,6 +464,7 @@ class ASRDataset(Dataset):
         cache_dir: str | Path | None = None,
         waveform_augment: "WaveformAugment | None" = None,
         waveform_augment_prob: float = 0.4,
+        speed_perturb_factors: list[float] | tuple[float, ...] | None = None,
     ):
         manifest_path = Path(manifest_path).expanduser()
         with open(manifest_path, encoding="utf-8") as f:
@@ -490,6 +503,12 @@ class ASRDataset(Dataset):
         self.spec_aug = SpecAugment() if augment else None
         self.wave_aug = waveform_augment if augment else None
         self.wave_aug_prob = waveform_augment_prob
+        # Perturbacja tempa: kazdy sample losuje czynnik z listy (1.0 = bez zmiany).
+        # Duracje do bucketingu zostaja z manifestu (odchylka do ~11% -- w budzecie).
+        self.speed_factors = (
+            [float(f) for f in speed_perturb_factors]
+            if (augment and speed_perturb_factors) else None
+        )
         self.cache_dir = Path(cache_dir).expanduser() if cache_dir else None
         self.durations = [e.get("duration", 0.0) for e in entries]
 
@@ -497,19 +516,24 @@ class ASRDataset(Dataset):
         return len(self.entries)
 
     def _compute_features(self, entry: dict) -> np.ndarray:
-        feats = None
-        # Augmentacja waveformu wymusza ekstrakcje on-the-fly (cache trzyma
-        # czyste cechy), wiec robimy ja tylko dla ulamka sampli
-        if self.wave_aug is not None and np.random.random() < self.wave_aug_prob:
+        # Speed perturbation i augmentacja waveformu wymuszaja ekstrakcje
+        # on-the-fly (cache trzyma czyste cechy) -- cache tylko bez obu
+        factor = 1.0
+        if self.speed_factors is not None:
+            factor = float(np.random.choice(self.speed_factors))
+        do_wave_aug = self.wave_aug is not None and np.random.random() < self.wave_aug_prob
+        if factor != 1.0 or do_wave_aug:
             wav = self.extractor.load_waveform(entry["audio_path"])
-            feats = self.extractor.features_from_waveform(self.wave_aug(wav))
-        if feats is None and self.cache_dir is not None:
+            if factor != 1.0:
+                wav = speed_perturb_waveform(wav, self.cfg.sample_rate, factor)
+            if do_wave_aug:
+                wav = self.wave_aug(wav)
+            return self.extractor.features_from_waveform(wav)
+        if self.cache_dir is not None:
             cache_path = self.cache_dir / feature_cache_name(entry["audio_path"])
             if cache_path.exists():
-                feats = np.load(cache_path)
-        if feats is None:
-            feats = self.extractor(entry["audio_path"])
-        return feats
+                return np.load(cache_path)
+        return self.extractor(entry["audio_path"])
 
     def __getitem__(self, idx: int) -> dict:
         # Uszkodzone/puste pliki audio (bledna duracja w manifescie przechodzi

@@ -80,6 +80,8 @@ class TrainConfig:
 
     # Aux CTC na encoderze (0.0 wylacza)
     ctc_weight: float = 0.3
+    # Label smoothing aux CTC: interpolacja z rozkladem jednostajnym (0.0 wylacza)
+    ctc_label_smoothing: float = 0.0
 
     # AMP
     use_amp: bool = True
@@ -221,7 +223,11 @@ def greedy_decode_batch(
     sos_id: int = 0,
     blank_id: int = 0,
     max_symbols_per_step: int = 3,
-) -> list[list[int]]:
+    return_scores: bool = False,
+) -> list[list[int]] | tuple[list[list[int]], list[float]]:
+    """return_scores=True zwraca tez sredni log-prob wyemitowanych tokenow na
+    sample (proxy pewnosci, np. do filtrowania pseudo-labeli); pusta hipoteza
+    dostaje -inf."""
     model.eval()
     device = audio_features.device
     B = audio_features.shape[0]
@@ -236,6 +242,7 @@ def greedy_decode_batch(
     f = model.encoder(audio_features, key_padding_mask=audio_padding_mask)  # (B, T', d_enc)
 
     all_hyps: list[list[int]] = []
+    all_scores: list[float] = []
     for b in range(B):
         T_b = int(logit_lengths[b])
         f_b = f[b : b + 1, :T_b]  # (1, T_b, d)
@@ -244,6 +251,7 @@ def greedy_decode_batch(
         # (zdecydowana wiekszosc ramek) g sie nie zmienia
         g_last = model.predictor(hyp)[:, -1:, :]
         out_tokens: list[int] = []
+        tok_logps: list[float] = []
 
         for t in range(T_b):
             f_t = f_b[:, t : t + 1, :]
@@ -254,6 +262,9 @@ def greedy_decode_batch(
                 if pred == blank_id:
                     break
 
+                if return_scores:
+                    lp = F.log_softmax(logit.flatten().float(), dim=-1)
+                    tok_logps.append(float(lp[pred]))
                 out_tokens.append(pred)
                 hyp = torch.cat(
                     [hyp, torch.tensor([[pred]], dtype=torch.long, device=device)],
@@ -261,7 +272,13 @@ def greedy_decode_batch(
                 )
                 g_last = model.predictor(hyp)[:, -1:, :]
         all_hyps.append(out_tokens)
+        if return_scores:
+            all_scores.append(
+                sum(tok_logps) / len(tok_logps) if tok_logps else float("-inf")
+            )
 
+    if return_scores:
+        return all_hyps, all_scores
     return all_hyps
 
 
@@ -505,6 +522,20 @@ def train(
                             blank=0,
                             zero_infinity=True,
                         )
+                        if cfg.ctc_label_smoothing > 0:
+                            # interpolacja z entropia krzyzowa do rozkladu
+                            # jednostajnego, maskowana po realnych dlugosciach T'
+                            T_sub = ctc_log_probs.shape[0]
+                            frame_mask = (
+                                torch.arange(T_sub, device=ctc_log_probs.device)[:, None]
+                                < logit_lengths[None, :]
+                            )
+                            ls_uniform = (
+                                -(ctc_log_probs.mean(dim=-1) * frame_mask).sum()
+                                / frame_mask.sum().clamp(min=1)
+                            )
+                            eps = cfg.ctc_label_smoothing
+                            loss_ctc = (1 - eps) * loss_ctc + eps * ls_uniform
                         loss = loss + cfg.ctc_weight * loss_ctc
 
                     if not torch.isfinite(loss):
@@ -683,6 +714,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         num_workers=int(tr.get("n_workers", 4)),
         max_batch_duration=tr.get("max_batch_duration"),
         ctc_weight=float(tr.get("ctc_weight", 0.3)),
+        ctc_label_smoothing=float(tr.get("ctc_label_smoothing", 0.0)),
         use_amp=bool(tr.get("use_amp", True)),
         amp_dtype=str(tr.get("amp_dtype", "bf16")),
         log_every=int(tr.get("log_every", 50)),
@@ -746,6 +778,10 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
             f"SNR={wave_aug.snr_db} dB"
         )
 
+    speed_factors = aug_cfg.get("speed_perturb")
+    if speed_factors:
+        logger.info(f"Speed perturbation: {speed_factors}")
+
     train_ds = ASRDataset(
         data["train_manifest_path"], tokenizer, audio_cfg=audio_cfg, augment=True,
         max_duration=data.get("max_audio_len", 20.0),
@@ -753,6 +789,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         cache_dir=data.get("feature_cache_dir"),
         waveform_augment=wave_aug,
         waveform_augment_prob=wave_aug_prob,
+        speed_perturb_factors=speed_factors,
     )
     val_ds = ASRDataset(
         data["val_manifest_path"], tokenizer, audio_cfg=audio_cfg, augment=False,
