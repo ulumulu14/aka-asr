@@ -100,6 +100,7 @@ def probe_durations(paths: list[Path], workers: int = 8) -> list[float | None]:
 
 # ---------------------------------------------------------------- BIGOS
 
+
 def convert_bigos(args: argparse.Namespace) -> None:
     import csv
 
@@ -111,8 +112,10 @@ def convert_bigos(args: argparse.Namespace) -> None:
             print(f"[bigos] {subset}/{split}")
             try:
                 tsv = hf_hub_download(
-                    BIGOS_REPO, f"data/{subset}/{split}.tsv",
-                    repo_type="dataset", token=token(),
+                    BIGOS_REPO,
+                    f"data/{subset}/{split}.tsv",
+                    repo_type="dataset",
+                    token=token(),
                 )
             except Exception as e:
                 print(f"[WARN] brak {subset}/{split}.tsv ({e}) -- pomijam")
@@ -121,8 +124,10 @@ def convert_bigos(args: argparse.Namespace) -> None:
             audio_dir = out_root / subset / split
             if not audio_dir.exists() or not any(audio_dir.rglob("*")):
                 tar = hf_hub_download(
-                    BIGOS_REPO, f"data/{subset}/{split}.tar.gz",
-                    repo_type="dataset", token=token(),
+                    BIGOS_REPO,
+                    f"data/{subset}/{split}.tar.gz",
+                    repo_type="dataset",
+                    token=token(),
                     local_dir=args.out_root / "_hf_tmp",
                 )
                 safe_extract_tar_gz(Path(tar), audio_dir)
@@ -184,8 +189,11 @@ def _voxpopuli_parquet_paths(split: str) -> list[str]:
     from huggingface_hub import HfApi
 
     tree = HfApi().list_repo_tree(
-        VOXPOPULI_REPO, repo_type="dataset", revision=VOXPOPULI_PARQUET_REV,
-        path_in_repo=f"pl/{split}", recursive=True,
+        VOXPOPULI_REPO,
+        repo_type="dataset",
+        revision=VOXPOPULI_PARQUET_REV,
+        path_in_repo=f"pl/{split}",
+        recursive=True,
     )
     return sorted(f.path for f in tree if f.path.endswith(".parquet"))
 
@@ -211,15 +219,22 @@ def convert_voxpopuli(args: argparse.Namespace) -> None:
                 print(f"[voxpopuli] {rpath}: fragment istnieje -- pomijam")
                 continue
 
-            local = Path(hf_hub_download(
-                VOXPOPULI_REPO, rpath, repo_type="dataset",
-                revision=VOXPOPULI_PARQUET_REV,
-                local_dir=args.out_root / "_hf_tmp",
-            ))
+            local = Path(
+                hf_hub_download(
+                    VOXPOPULI_REPO,
+                    rpath,
+                    repo_type="dataset",
+                    revision=VOXPOPULI_PARQUET_REV,
+                    local_dir=args.out_root / "_hf_tmp",
+                )
+            )
             entries: list[dict] = []
             pf = pq.ParquetFile(local)
-            columns = [c for c in ("audio", "normalized_text", "raw_text", "audio_id")
-                       if c in pf.schema_arrow.names]
+            columns = [
+                c
+                for c in ("audio", "normalized_text", "raw_text", "audio_id")
+                if c in pf.schema_arrow.names
+            ]
             for batch in pf.iter_batches(batch_size=64, columns=columns):
                 for row in batch.to_pylist():
                     text = (row.get("normalized_text") or row.get("raw_text") or "").strip()
@@ -257,6 +272,7 @@ def convert_voxpopuli(args: argparse.Namespace) -> None:
 
 # ---------------------------------------------------------------- YODAS
 
+
 def _read_kv(path: Path) -> dict[str, str]:
     """Pliki yodas text/duration: '<utt_id> <wartosc do konca linii>'."""
     out: dict[str, str] = {}
@@ -276,19 +292,21 @@ def convert_yodas(args: argparse.Namespace) -> None:
         shard = f"{i:08d}"
         print(f"[yodas] shard {shard} ({i + 1}/{args.shards})")
         texts = _read_kv(
-            Path(hf_hub_download(YODAS_REPO, f"data/pl000/text/{shard}.txt",
-                                 repo_type="dataset"))
+            Path(hf_hub_download(YODAS_REPO, f"data/pl000/text/{shard}.txt", repo_type="dataset"))
         )
         durs = _read_kv(
-            Path(hf_hub_download(YODAS_REPO, f"data/pl000/duration/{shard}.txt",
-                                 repo_type="dataset"))
+            Path(
+                hf_hub_download(YODAS_REPO, f"data/pl000/duration/{shard}.txt", repo_type="dataset")
+            )
         )
 
         audio_dir = out_root / shard
         if not audio_dir.exists() or not any(audio_dir.rglob("*")):
             tar = hf_hub_download(
-                YODAS_REPO, f"data/pl000/audio/{shard}.tar.gz",
-                repo_type="dataset", local_dir=args.out_root / "_hf_tmp",
+                YODAS_REPO,
+                f"data/pl000/audio/{shard}.tar.gz",
+                repo_type="dataset",
+                local_dir=args.out_root / "_hf_tmp",
             )
             safe_extract_tar_gz(Path(tar), audio_dir)
             Path(tar).unlink(missing_ok=True)
@@ -308,9 +326,7 @@ def convert_yodas(args: argparse.Namespace) -> None:
                 dur = round(float(dur_s), 3) if dur_s else round(sf.info(str(p)).duration, 3)
             except Exception:
                 continue
-            entries.append(
-                {"audio_path": str(p.resolve()), "duration": dur, "text": text}
-            )
+            entries.append({"audio_path": str(p.resolve()), "duration": dur, "text": text})
         print(f"       +{len(entries) - n_before} sampli")
 
     write_manifest(entries, args.manifest_dir / "train_manifest_yodas.jsonl")
@@ -318,12 +334,18 @@ def convert_yodas(args: argparse.Namespace) -> None:
 
 # ---------------------------------------------------------------- CLI
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
-    parser.add_argument("--out-root", type=Path, default=Path("data"),
-                        help="Katalog na audio (domyslnie data/)")
-    parser.add_argument("--manifest-dir", type=Path, default=Path("data"),
-                        help="Katalog na manifesty JSONL (domyslnie data/)")
+    parser.add_argument(
+        "--out-root", type=Path, default=Path("data"), help="Katalog na audio (domyslnie data/)"
+    )
+    parser.add_argument(
+        "--manifest-dir",
+        type=Path,
+        default=Path("data"),
+        help="Katalog na manifesty JSONL (domyslnie data/)",
+    )
     sub = parser.add_subparsers(dest="source", required=True)
 
     p_bigos = sub.add_parser("bigos", help="amu-cai/pl-asr-bigos-v2")
@@ -334,8 +356,9 @@ def main() -> None:
     p_vox.set_defaults(fn=convert_voxpopuli)
 
     p_yodas = sub.add_parser("yodas", help="espnet/yodas pl000 (manualne napisy)")
-    p_yodas.add_argument("--shards", type=int, default=10,
-                         help="Ile shardow pobrac (1 shard ~ 0.9 GB; calosc = 78)")
+    p_yodas.add_argument(
+        "--shards", type=int, default=10, help="Ile shardow pobrac (1 shard ~ 0.9 GB; calosc = 78)"
+    )
     p_yodas.set_defaults(fn=convert_yodas)
 
     args = parser.parse_args()

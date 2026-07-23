@@ -13,6 +13,7 @@ tym samym podzbiorze.
 
 WER liczony na formie mowionej (bez ITN) -- tak jak walidacja treningowa.
 """
+
 import argparse
 import sys
 import time
@@ -70,19 +71,28 @@ def main() -> None:
     model, tokenizer, audio_cfg, max_symbols = load_asr(args.checkpoint, device)
 
     ds = ASRDataset(
-        str(args.manifest), tokenizer, audio_cfg=audio_cfg, augment=False,
-        max_duration=20.0, min_duration=0.5,
+        str(args.manifest),
+        tokenizer,
+        audio_cfg=audio_cfg,
+        augment=False,
+        max_duration=20.0,
+        min_duration=0.5,
     )
     if args.limit:
         ds.entries = ds.entries[: args.limit]
         ds.durations = ds.durations[: args.limit]
     sampler = LengthBucketBatchSampler(
-        ds.durations, args.batch_size, shuffle=False,
+        ds.durations,
+        args.batch_size,
+        shuffle=False,
         max_batch_duration=args.max_batch_duration,
     )
     loader = DataLoader(
-        ds, batch_sampler=sampler, collate_fn=make_collate_fn(blank_id=0),
-        num_workers=args.num_workers, pin_memory=(device.type == "cuda"),
+        ds,
+        batch_sampler=sampler,
+        collate_fn=make_collate_fn(blank_id=0),
+        num_workers=args.num_workers,
+        pin_memory=(device.type == "cuda"),
     )
 
     use_beam = args.beam_size and args.beam_size > 1
@@ -99,12 +109,19 @@ def main() -> None:
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp):
                 if use_beam:
                     hyp_ids = beam_search_decode_batch(
-                        model, audio, logit_lengths, audio_padding_mask=mask,
-                        beam_size=args.beam_size, max_symbols_per_step=max_symbols,
+                        model,
+                        audio,
+                        logit_lengths,
+                        audio_padding_mask=mask,
+                        beam_size=args.beam_size,
+                        max_symbols_per_step=max_symbols,
                     )
                 else:
                     hyp_ids = greedy_decode_batch(
-                        model, audio, logit_lengths, audio_padding_mask=mask,
+                        model,
+                        audio,
+                        logit_lengths,
+                        audio_padding_mask=mask,
                         max_symbols_per_step=max_symbols,
                     )
             targets, target_lengths = batch["targets"], batch["target_lengths"]

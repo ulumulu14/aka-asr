@@ -113,8 +113,7 @@ def _features_from_waveform(
 
     if wav_t.shape[1] < cfg.n_fft:
         raise ValueError(
-            f"Nagranie za krotkie: {wav_t.shape[1]} probek po resamplingu "
-            f"(minimum {cfg.n_fft})"
+            f"Nagranie za krotkie: {wav_t.shape[1]} probek po resamplingu " f"(minimum {cfg.n_fft})"
         )
 
     return cmvn(extractor.features_from_waveform(wav_t))

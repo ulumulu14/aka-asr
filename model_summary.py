@@ -16,7 +16,7 @@ def main(size: str, vocab_size: int):
     N_MELS = 80
     B = 8
     T = 400  # 4s audio przy 100 fps
-    U = 30   # dlugosc label-sequence (bez SOS)
+    U = 30  # dlugosc label-sequence (bez SOS)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 

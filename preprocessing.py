@@ -507,7 +507,8 @@ class ASRDataset(Dataset):
         # Duracje do bucketingu zostaja z manifestu (odchylka do ~11% -- w budzecie).
         self.speed_factors = (
             [float(f) for f in speed_perturb_factors]
-            if (augment and speed_perturb_factors) else None
+            if (augment and speed_perturb_factors)
+            else None
         )
         self.cache_dir = Path(cache_dir).expanduser() if cache_dir else None
         self.durations = [e.get("duration", 0.0) for e in entries]
@@ -655,9 +656,7 @@ class CollateFn:
         )
 
         T_sub_max = int(logit_lens.max())
-        audio_padding_mask = (
-            torch.arange(T_sub_max)[None, :] >= logit_lens[:, None]
-        )
+        audio_padding_mask = torch.arange(T_sub_max)[None, :] >= logit_lens[:, None]
 
         return {
             "audio_features": padded_feats,

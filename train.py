@@ -237,8 +237,7 @@ def greedy_decode_batch(
     if audio_padding_mask is None:
         T_sub_max = int(logit_lengths.max())
         audio_padding_mask = (
-            torch.arange(T_sub_max, device=device)[None, :]
-            >= logit_lengths.to(device)[:, None]
+            torch.arange(T_sub_max, device=device)[None, :] >= logit_lengths.to(device)[:, None]
         )
 
     f = model.encoder(audio_features, key_padding_mask=audio_padding_mask)  # (B, T', d_enc)
@@ -275,9 +274,7 @@ def greedy_decode_batch(
                 g_last = model.predictor(hyp)[:, -1:, :]
         all_hyps.append(out_tokens)
         if return_scores:
-            all_scores.append(
-                sum(tok_logps) / len(tok_logps) if tok_logps else float("-inf")
-            )
+            all_scores.append(sum(tok_logps) / len(tok_logps) if tok_logps else float("-inf"))
 
     if return_scores:
         return all_hyps, all_scores
@@ -309,9 +306,7 @@ def validate(
         audio_padding_mask = batch["audio_padding_mask"].to(device)
 
         logits = model(audio, labels, audio_padding_mask=audio_padding_mask)
-        loss = rnnt_loss(
-            logits.float(), targets, logit_lengths, target_lengths, blank=0
-        )
+        loss = rnnt_loss(logits.float(), targets, logit_lengths, target_lengths, blank=0)
         bs = audio.size(0)
         total_loss += loss.item() * bs
         total_samples += bs
@@ -478,9 +473,14 @@ def train(
     logger.info("Start treningu")
     epoch_bar = tqdm(
         range(start_epoch, cfg.max_epochs),
-        desc="epoki", unit="ep", position=0, leave=True,
-        initial=start_epoch, total=cfg.max_epochs,
-        dynamic_ncols=True, ascii=True,
+        desc="epoki",
+        unit="ep",
+        position=0,
+        leave=True,
+        initial=start_epoch,
+        total=cfg.max_epochs,
+        dynamic_ncols=True,
+        ascii=True,
     )
     try:
         for epoch in epoch_bar:
@@ -500,9 +500,12 @@ def train(
                     audio_padding_mask = batch["audio_padding_mask"].to(device, non_blocking=True)
 
                     # Forward w AMP, loss liczony w fp32
-                    with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
+                    with torch.amp.autocast(
+                        device_type=device.type, dtype=amp_dtype, enabled=use_amp
+                    ):
                         logits, enc_out = model(
-                            audio, labels,
+                            audio,
+                            labels,
                             audio_padding_mask=audio_padding_mask,
                             return_encoder_out=True,
                         )
@@ -515,7 +518,9 @@ def train(
                         raw_model = getattr(model, "_orig_mod", model)
                         ctc_log_probs = F.log_softmax(
                             raw_model.ctc_head(enc_out.float()), dim=-1
-                        ).transpose(0, 1)  # (T', B, V+1)
+                        ).transpose(
+                            0, 1
+                        )  # (T', B, V+1)
                         loss_ctc = F.ctc_loss(
                             ctc_log_probs,
                             targets,
@@ -532,10 +537,9 @@ def train(
                                 torch.arange(T_sub, device=ctc_log_probs.device)[:, None]
                                 < logit_lengths[None, :]
                             )
-                            ls_uniform = (
-                                -(ctc_log_probs.mean(dim=-1) * frame_mask).sum()
-                                / frame_mask.sum().clamp(min=1)
-                            )
+                            ls_uniform = -(
+                                ctc_log_probs.mean(dim=-1) * frame_mask
+                            ).sum() / frame_mask.sum().clamp(min=1)
                             eps = cfg.ctc_label_smoothing
                             loss_ctc = (1 - eps) * loss_ctc + eps * ls_uniform
                         loss = loss + cfg.ctc_weight * loss_ctc
@@ -602,15 +606,25 @@ def train(
                     if cfg.save_every_steps and global_step % cfg.save_every_steps == 0:
                         save_ckpt(
                             ckpt_dir / "last.pt",
-                            model=model, optimizer=optimizer, scheduler=scheduler,
-                            scaler=scaler, step=global_step, epoch=epoch,
-                            best_wer=best_wer, cfg=cfg, meta=meta, epoch_finished=False,
+                            model=model,
+                            optimizer=optimizer,
+                            scheduler=scheduler,
+                            scaler=scaler,
+                            step=global_step,
+                            epoch=epoch,
+                            best_wer=best_wer,
+                            cfg=cfg,
+                            meta=meta,
+                            epoch_finished=False,
                         )
 
             if (epoch + 1) % cfg.eval_every_epochs == 0:
                 logger.info("Walidacja...")
                 metrics = validate(
-                    model, val_loader, tokenizer, device,
+                    model,
+                    val_loader,
+                    tokenizer,
+                    device,
                     max_symbols_per_step=cfg.max_symbols_per_step,
                     wer_max_samples=cfg.wer_max_samples,
                 )
@@ -632,18 +646,30 @@ def train(
                     best_wer = metrics["wer"]
                     save_ckpt(
                         ckpt_dir / "best.pt",
-                        model=model, optimizer=optimizer, scheduler=scheduler,
-                        scaler=scaler, step=global_step, epoch=epoch,
-                        best_wer=best_wer, cfg=cfg, meta=meta,
+                        model=model,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                        scaler=scaler,
+                        step=global_step,
+                        epoch=epoch,
+                        best_wer=best_wer,
+                        cfg=cfg,
+                        meta=meta,
                     )
                     logger.info(f"Nowy najlepszy WER={best_wer:.2%} -- zapisano best.pt")
 
                 # Last N checkpoints
                 save_ckpt(
                     ckpt_dir / f"epoch_{epoch:04d}.pt",
-                    model=model, optimizer=optimizer, scheduler=scheduler,
-                    scaler=scaler, step=global_step, epoch=epoch,
-                    best_wer=best_wer, cfg=cfg, meta=meta,
+                    model=model,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    scaler=scaler,
+                    step=global_step,
+                    epoch=epoch,
+                    best_wer=best_wer,
+                    cfg=cfg,
+                    meta=meta,
                 )
                 _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
 
@@ -655,8 +681,15 @@ def train(
         logger.warning("Przerwano recznie -- zapisuje last.pt")
         save_ckpt(
             ckpt_dir / "last.pt",
-            model=model, optimizer=optimizer, scheduler=scheduler, scaler=scaler,
-            step=global_step, epoch=epoch, best_wer=best_wer, cfg=cfg, meta=meta,
+            model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+            step=global_step,
+            epoch=epoch,
+            best_wer=best_wer,
+            cfg=cfg,
+            meta=meta,
             epoch_finished=False,
         )
     except Exception:
@@ -676,18 +709,25 @@ def load_config(config_path: str) -> dict:
 @click.command()
 @click.argument("config_path", type=click.Path(exists=True))
 @click.option(
-    "--model-size", "--model_size", "model_size",
-    type=click.Choice(list(MODEL_SIZES)), default=None,
+    "--model-size",
+    "--model_size",
+    "model_size",
+    type=click.Choice(list(MODEL_SIZES)),
+    default=None,
     help="Rozmiar modelu (nadpisuje config)",
 )
 @click.option(
-    "--device", "device_str",
-    type=click.Choice(["auto", "cuda", "cpu"]), default="auto",
+    "--device",
+    "device_str",
+    type=click.Choice(["auto", "cuda", "cpu"]),
+    default="auto",
     help="Urzadzenie treningu (auto = cuda jesli dostepna)",
 )
 @click.option(
-    "--resume", "resume_path",
-    type=click.Path(exists=True), default=None,
+    "--resume",
+    "resume_path",
+    type=click.Path(exists=True),
+    default=None,
     help="Checkpoint .pt do wznowienia treningu",
 )
 def main(config_path: str, model_size: str | None, device_str: str, resume_path: str | None):
@@ -731,7 +771,9 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     )
 
     exp_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    ckpt_dir = Path(tr.get("ckpt_root", "checkpoints")).expanduser() / f"conformer_{model_size}" / exp_name
+    ckpt_dir = (
+        Path(tr.get("ckpt_root", "checkpoints")).expanduser() / f"conformer_{model_size}" / exp_name
+    )
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     cfg.ckpt_dir = str(ckpt_dir)
     setup_logging(ckpt_dir / "train.log")
@@ -785,7 +827,10 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         logger.info(f"Speed perturbation: {speed_factors}")
 
     train_ds = ASRDataset(
-        data["train_manifest_path"], tokenizer, audio_cfg=audio_cfg, augment=True,
+        data["train_manifest_path"],
+        tokenizer,
+        audio_cfg=audio_cfg,
+        augment=True,
         max_duration=data.get("max_audio_len", 20.0),
         min_duration=data.get("min_audio_len", 0.5),
         cache_dir=data.get("feature_cache_dir"),
@@ -794,7 +839,10 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         speed_perturb_factors=speed_factors,
     )
     val_ds = ASRDataset(
-        data["val_manifest_path"], tokenizer, audio_cfg=audio_cfg, augment=False,
+        data["val_manifest_path"],
+        tokenizer,
+        audio_cfg=audio_cfg,
+        augment=False,
         max_duration=data.get("max_audio_len", 20.0),
         min_duration=data.get("min_audio_len", 0.5),
         cache_dir=data.get("feature_cache_dir"),
@@ -802,11 +850,16 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     collate = make_collate_fn(blank_id=0)
 
     train_sampler = LengthBucketBatchSampler(
-        train_ds.durations, cfg.batch_size, shuffle=True,
-        max_batch_duration=cfg.max_batch_duration, seed=cfg.seed,
+        train_ds.durations,
+        cfg.batch_size,
+        shuffle=True,
+        max_batch_duration=cfg.max_batch_duration,
+        seed=cfg.seed,
     )
     val_sampler = LengthBucketBatchSampler(
-        val_ds.durations, cfg.batch_size, shuffle=False,
+        val_ds.durations,
+        cfg.batch_size,
+        shuffle=False,
         max_batch_duration=cfg.max_batch_duration,
     )
 
@@ -845,8 +898,14 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     }
 
     train(
-        model, train_loader, val_loader, tokenizer, cfg,
-        device=device, resume_state=resume_state, meta=meta,
+        model,
+        train_loader,
+        val_loader,
+        tokenizer,
+        cfg,
+        device=device,
+        resume_state=resume_state,
+        meta=meta,
     )
 
 

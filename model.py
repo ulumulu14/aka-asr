@@ -9,18 +9,36 @@ from torchaudio.functional import rnnt_loss as ta_rnnt_loss
 # Rozmiary modelu wybierane przez --model_size / config
 MODEL_SIZES = {
     "smol": dict(
-        enc_layers=2, enc_dim=64, enc_heads=4, enc_kernel=15,
-        pred_layers=1, pred_dim=64, pred_heads=4, pred_kernel=7,
+        enc_layers=2,
+        enc_dim=64,
+        enc_heads=4,
+        enc_kernel=15,
+        pred_layers=1,
+        pred_dim=64,
+        pred_heads=4,
+        pred_kernel=7,
         joint_dim=128,
     ),
     "mid": dict(
-        enc_layers=16, enc_dim=256, enc_heads=4, enc_kernel=31,
-        pred_layers=1, pred_dim=320, pred_heads=4, pred_kernel=15,
+        enc_layers=16,
+        enc_dim=256,
+        enc_heads=4,
+        enc_kernel=31,
+        pred_layers=1,
+        pred_dim=320,
+        pred_heads=4,
+        pred_kernel=15,
         joint_dim=320,
     ),
     "big": dict(
-        enc_layers=17, enc_dim=512, enc_heads=8, enc_kernel=31,
-        pred_layers=2, pred_dim=640, pred_heads=8, pred_kernel=15,
+        enc_layers=17,
+        enc_dim=512,
+        enc_heads=8,
+        enc_kernel=31,
+        pred_layers=2,
+        pred_dim=640,
+        pred_heads=8,
+        pred_kernel=15,
         joint_dim=640,
     ),
 }
@@ -119,7 +137,7 @@ class MultiHeadSelfAttentionModule(nn.Module):
     ) -> torch.Tensor:
         x_ln = self.ln(x)
         attn_mask = None
-    
+
         if causal:
             L = x_ln.size(1)
             attn_mask = torch.triu(

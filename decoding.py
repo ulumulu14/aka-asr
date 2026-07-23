@@ -14,6 +14,7 @@ Plytka fuzja (shallow fusion): podaj obiekt z metoda
 w przestrzeni ID tokenizera ASR (0 = blank, nigdy nie odpytywany):
     score = log P_asr + lm_weight * log P_lm + length_bonus * |tokeny|
 """
+
 from __future__ import annotations
 
 import math
@@ -72,8 +73,7 @@ def beam_search_decode_batch(
     if audio_padding_mask is None:
         T_sub_max = int(logit_lengths.max())
         audio_padding_mask = (
-            torch.arange(T_sub_max, device=device)[None, :]
-            >= logit_lengths.to(device)[:, None]
+            torch.arange(T_sub_max, device=device)[None, :] >= logit_lengths.to(device)[:, None]
         )
 
     f = model.encoder(audio_features, key_padding_mask=audio_padding_mask)  # (B, T', d)

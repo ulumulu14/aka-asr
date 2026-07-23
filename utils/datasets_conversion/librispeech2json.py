@@ -64,8 +64,9 @@ def build_manifest(split_dir: Path, out_path: Path) -> None:
     n_written = n_missing = 0
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with transcripts_path.open("r", encoding="utf-8") as fin, \
-            out_path.open("w", encoding="utf-8") as fout:
+    with transcripts_path.open("r", encoding="utf-8") as fin, out_path.open(
+        "w", encoding="utf-8"
+    ) as fout:
         for line in tqdm(fin, desc="budowanie manifestu"):
             line = line.rstrip("\n")
             if not line or "\t" not in line:
@@ -112,7 +113,9 @@ def main() -> None:
     parser.add_argument("mls_root", type=Path, help="Katalog MLS (zawiera train/dev/test)")
     parser.add_argument("--split", default="train", choices=["train", "dev", "test"])
     parser.add_argument(
-        "--out", type=Path, default=None,
+        "--out",
+        type=Path,
+        default=None,
         help="Sciezka wyjsciowa (domyslnie {mls_root}/{split}_manifest.jsonl)",
     )
     args = parser.parse_args()

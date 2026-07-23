@@ -14,6 +14,7 @@ pewnosci); prog --min-score np. -0.3 (ostry) ... -0.7 (luzny). Typowy przeplyw:
 dociagnac wiecej shardow YODAS (hf2json.py yodas --shards N), zdekodowac je
 najlepszym modelem, przefiltrowac i dokleic wynik do train_manifest_all.jsonl.
 """
+
 import argparse
 import json
 import sys
@@ -82,11 +83,19 @@ def main() -> None:
     ap.add_argument("--checkpoint", required=True, type=Path)
     ap.add_argument("--manifest", required=True, type=Path)
     ap.add_argument("--out", required=True, type=Path)
-    ap.add_argument("--min-score", type=float, default=-0.5,
-                    help="Prog sredniego log-prob tokenow (wyzszy = ostrzejszy filtr)")
+    ap.add_argument(
+        "--min-score",
+        type=float,
+        default=-0.5,
+        help="Prog sredniego log-prob tokenow (wyzszy = ostrzejszy filtr)",
+    )
     ap.add_argument("--min-chars", type=int, default=3)
-    ap.add_argument("--max-tokens-per-sec", type=float, default=0.0,
-                    help="Odetnij podejrzanie geste hipotezy (petle); 0 = wylaczone")
+    ap.add_argument(
+        "--max-tokens-per-sec",
+        type=float,
+        default=0.0,
+        help="Odetnij podejrzanie geste hipotezy (petle); 0 = wylaczone",
+    )
     ap.add_argument("--min-duration", type=float, default=0.5)
     ap.add_argument("--max-duration", type=float, default=20.0)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -130,12 +139,17 @@ def main() -> None:
 
     ds = _AudioOnlyDS(entries, audio_cfg)
     sampler = LengthBucketBatchSampler(
-        ds.durations, args.batch_size, shuffle=False,
+        ds.durations,
+        args.batch_size,
+        shuffle=False,
         max_batch_duration=args.max_batch_duration,
     )
     loader = DataLoader(
-        ds, batch_sampler=sampler, collate_fn=_collate,
-        num_workers=args.num_workers, pin_memory=(device.type == "cuda"),
+        ds,
+        batch_sampler=sampler,
+        collate_fn=_collate,
+        num_workers=args.num_workers,
+        pin_memory=(device.type == "cuda"),
     )
 
     use_amp = device.type == "cuda"
@@ -151,8 +165,12 @@ def main() -> None:
             mask = batch["audio_padding_mask"].to(device)
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp):
                 hyp_ids, scores = greedy_decode_batch(
-                    model, audio, logit_lengths, audio_padding_mask=mask,
-                    max_symbols_per_step=max_symbols, return_scores=True,
+                    model,
+                    audio,
+                    logit_lengths,
+                    audio_padding_mask=mask,
+                    max_symbols_per_step=max_symbols,
+                    return_scores=True,
                 )
             for ids, score, idx in zip(hyp_ids, scores, batch["idx"]):
                 entry = entries[idx]
@@ -164,25 +182,40 @@ def main() -> None:
                 if len(text) < args.min_chars:
                     drop_chars += 1
                     continue
-                if args.max_tokens_per_sec > 0 and dur > 0 and len(ids) / dur > args.max_tokens_per_sec:
+                if (
+                    args.max_tokens_per_sec > 0
+                    and dur > 0
+                    and len(ids) / dur > args.max_tokens_per_sec
+                ):
                     drop_rate += 1
                     continue
-                out_f.write(json.dumps({
-                    "audio_path": entry["audio_path"],
-                    "duration": dur,
-                    "text": text,
-                    "pl_score": round(float(score), 4),
-                }, ensure_ascii=False) + "\n")
+                out_f.write(
+                    json.dumps(
+                        {
+                            "audio_path": entry["audio_path"],
+                            "duration": dur,
+                            "text": text,
+                            "pl_score": round(float(score), 4),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
                 kept += 1
             if bi % 20 == 0:
                 done = kept + drop_score + drop_chars + drop_rate
-                print(f"  {done}/{len(entries)} | zostaje {kept} | "
-                      f"{done / max(1e-9, time.time() - t0):.0f} sampli/s", flush=True)
+                print(
+                    f"  {done}/{len(entries)} | zostaje {kept} | "
+                    f"{done / max(1e-9, time.time() - t0):.0f} sampli/s",
+                    flush=True,
+                )
 
     total = kept + drop_score + drop_chars + drop_rate
     print(f"[OK] {kept}/{total} pseudo-labeli -> {args.out}")
-    print(f"     odrzucone: {drop_score} score < {args.min_score}, "
-          f"{drop_chars} za krotkie, {drop_rate} tokens/s")
+    print(
+        f"     odrzucone: {drop_score} score < {args.min_score}, "
+        f"{drop_chars} za krotkie, {drop_rate} tokens/s"
+    )
 
 
 if __name__ == "__main__":

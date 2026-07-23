@@ -44,7 +44,7 @@ def safe_extract_tar_gz(tar_path: Path, output_dir: Path) -> None:
                 raise RuntimeError(f"Archiwum zawiera link symboliczny/twardy: {member.name}")
 
         tar.extractall(output_dir)
-    
+
     print("Extraction finished.")
 
 
@@ -52,9 +52,7 @@ def find_tsv(extracted_dir: Path, split: str) -> Path:
     matches = sorted(extracted_dir.rglob(f"{split}.tsv"))
 
     if not matches:
-        raise FileNotFoundError(
-            f"Nie znaleziono pliku {split}.tsv w katalogu {extracted_dir}"
-        )
+        raise FileNotFoundError(f"Nie znaleziono pliku {split}.tsv w katalogu {extracted_dir}")
 
     return matches[0]
 
@@ -213,8 +211,7 @@ def build_manifest(
 
         if missing:
             raise RuntimeError(
-                f"Brakuje kolumn w TSV: {missing}. "
-                f"Dostępne kolumny: {reader.fieldnames}"
+                f"Brakuje kolumn w TSV: {missing}. " f"Dostępne kolumny: {reader.fieldnames}"
             )
 
         rows = list(reader)
@@ -228,9 +225,7 @@ def build_manifest(
     # ffmpeg to subprocess, więc wątki wystarczą do zrównoleglenia
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [
-            pool.submit(
-                process_row, row, tsv_path, wav_dir, sample_rate, overwrite, clip_durations
-            )
+            pool.submit(process_row, row, tsv_path, wav_dir, sample_rate, overwrite, clip_durations)
             for row in rows
         ]
         for future in tqdm(as_completed(futures), total=len(futures), desc="konwersja"):
@@ -252,7 +247,7 @@ def save_json(manifest: list[dict], output_path: Path, jsonl: bool = False) -> N
 
     if jsonl:
         with output_path.open("w", encoding="utf-8") as f:
-            for item in tqdm(manifest, desc='Saving JSON file'):
+            for item in tqdm(manifest, desc="Saving JSON file"):
                 f.write(json.dumps(item, ensure_ascii=False) + "\n")
     else:
         with output_path.open("w", encoding="utf-8") as f:

@@ -13,34 +13,68 @@ referencje sa w formie mowionej (dataset odrzuca transkrypcje z cyframi).
 Uzycie:  from itn import itn_pl;  itn_pl("dwa tysiące piętnaście")  -> "2015"
 CLI:     python itn.py "tekst..."     (bez argumentu czyta stdin)
 """
+
 from __future__ import annotations
 
 import sys
 
 UNITS = {
-    "jeden": 1, "jedna": 1, "jedno": 1,
-    "dwa": 2, "dwie": 2,
-    "trzy": 3, "cztery": 4, "pięć": 5, "sześć": 6,
-    "siedem": 7, "osiem": 8, "dziewięć": 9,
+    "jeden": 1,
+    "jedna": 1,
+    "jedno": 1,
+    "dwa": 2,
+    "dwie": 2,
+    "trzy": 3,
+    "cztery": 4,
+    "pięć": 5,
+    "sześć": 6,
+    "siedem": 7,
+    "osiem": 8,
+    "dziewięć": 9,
 }
 TEENS = {
-    "dziesięć": 10, "jedenaście": 11, "dwanaście": 12, "trzynaście": 13,
-    "czternaście": 14, "piętnaście": 15, "szesnaście": 16, "siedemnaście": 17,
-    "osiemnaście": 18, "dziewiętnaście": 19,
+    "dziesięć": 10,
+    "jedenaście": 11,
+    "dwanaście": 12,
+    "trzynaście": 13,
+    "czternaście": 14,
+    "piętnaście": 15,
+    "szesnaście": 16,
+    "siedemnaście": 17,
+    "osiemnaście": 18,
+    "dziewiętnaście": 19,
 }
 TENS = {
-    "dwadzieścia": 20, "trzydzieści": 30, "czterdzieści": 40, "pięćdziesiąt": 50,
-    "sześćdziesiąt": 60, "siedemdziesiąt": 70, "osiemdziesiąt": 80, "dziewięćdziesiąt": 90,
+    "dwadzieścia": 20,
+    "trzydzieści": 30,
+    "czterdzieści": 40,
+    "pięćdziesiąt": 50,
+    "sześćdziesiąt": 60,
+    "siedemdziesiąt": 70,
+    "osiemdziesiąt": 80,
+    "dziewięćdziesiąt": 90,
 }
 HUNDREDS = {
-    "sto": 100, "dwieście": 200, "trzysta": 300, "czterysta": 400, "pięćset": 500,
-    "sześćset": 600, "siedemset": 700, "osiemset": 800, "dziewięćset": 900,
+    "sto": 100,
+    "dwieście": 200,
+    "trzysta": 300,
+    "czterysta": 400,
+    "pięćset": 500,
+    "sześćset": 600,
+    "siedemset": 700,
+    "osiemset": 800,
+    "dziewięćset": 900,
 }
 # wartosc, czy_forma_pojedyncza (pojedyncza moze wystapic bez licznika: "tysiac zlotych")
 SCALES = {
-    "tysiąc": (1_000, True), "tysiące": (1_000, False), "tysięcy": (1_000, False),
-    "milion": (1_000_000, True), "miliony": (1_000_000, False), "milionów": (1_000_000, False),
-    "miliard": (1_000_000_000, True), "miliardy": (1_000_000_000, False),
+    "tysiąc": (1_000, True),
+    "tysiące": (1_000, False),
+    "tysięcy": (1_000, False),
+    "milion": (1_000_000, True),
+    "miliony": (1_000_000, False),
+    "milionów": (1_000_000, False),
+    "miliard": (1_000_000_000, True),
+    "miliardy": (1_000_000_000, False),
     "miliardów": (1_000_000_000, False),
 }
 

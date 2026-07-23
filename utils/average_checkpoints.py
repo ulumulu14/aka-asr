@@ -10,6 +10,7 @@ Wynik niesie pelne metadane (model_cfg/tokenizer/audio_cfg/cfg), wiec dziala
 wszedzie tam, gdzie zwykly checkpoint (demo apka, utils/evaluate_wer.py).
 NIE nadaje sie do --resume treningu (stan optymalizatora jest wyciety).
 """
+
 import argparse
 import re
 import sys
@@ -33,7 +34,9 @@ def collect(inputs: list[Path], last: int) -> list[Path]:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Usrednianie wag checkpointow")
     ap.add_argument("inputs", nargs="+", type=Path, help="Katalog runu ALBO lista plikow .pt")
-    ap.add_argument("--last", type=int, default=5, help="Ile ostatnich epok z katalogu (domyslnie 5)")
+    ap.add_argument(
+        "--last", type=int, default=5, help="Ile ostatnich epok z katalogu (domyslnie 5)"
+    )
     ap.add_argument("--out", type=Path, default=None, help="Domyslnie <katalog>/avg_lastK.pt")
     args = ap.parse_args()
 
@@ -52,8 +55,7 @@ def main() -> None:
         if avg is None:
             base = state
             avg = {
-                k: (v.clone().float() if torch.is_floating_point(v) else v)
-                for k, v in sd.items()
+                k: (v.clone().float() if torch.is_floating_point(v) else v) for k, v in sd.items()
             }
         else:
             if sd.keys() != avg.keys():
