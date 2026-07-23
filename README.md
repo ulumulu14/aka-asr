@@ -87,6 +87,26 @@ Checkpointy (`best.pt`, `epoch_NNNN.pt`, rolling `last.pt` co `save_every_steps`
 zawierają wagi, stan optymalizatora/schedulera oraz architekturę, tokenizer i config audio —
 model da się odtworzyć z samego `.pt`.
 
+## Tricki treningowe i narzędzia
+
+- **Speed perturbation** (Kaldi 0.9/1.0/1.1×): `augment.speed_perturb: [0.9, 1.0, 1.1]`
+  w configu (sample bez czynnika 1.0 omijają feature_cache — wolniejszy DataLoader).
+- **Label smoothing aux CTC**: `training.ctc_label_smoothing: 0.05`.
+- **Uśrednianie checkpointów** (tanie +0.2–0.5 pp WER, nie do `--resume`):
+  ```bash
+  python utils/average_checkpoints.py checkpoints/conformer_big/<exp> --last 5
+  ```
+- **WER greedy vs beam search** (beam + hak shallow-fusion LM w `decoding.py`):
+  ```bash
+  python utils/evaluate_wer.py --checkpoint <ckpt> --manifest data/val_manifest_all.jsonl --beam-size 4
+  ```
+- **Pseudo-labeling** (self-training na nieopisanym audio, np. dalsze shardy YODAS):
+  ```bash
+  python utils/pseudo_label.py --checkpoint <ckpt> --manifest <nieopisane.jsonl> --out data/pseudo.jsonl
+  ```
+- **ITN** — liczby słowami → cyfry, tylko warstwa wyświetlania (`itn.py`);
+  w demo apce włącza ją `ASR_DEMO_ITN=1`.
+
 ## Podgląd architektury
 
 ```bash

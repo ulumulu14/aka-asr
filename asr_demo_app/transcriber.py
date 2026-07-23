@@ -157,4 +157,12 @@ def transcribe(samples: np.ndarray, sample_rate: int, checkpoint_path: str) -> s
         f"{len(hyp_ids[0])} tokenow, {feats.shape[0]} ramek",
         flush=True,
     )
+    # ITN (liczby slowami -> cyfry) tylko do wyswietlania; ASR_DEMO_ITN=1 wlacza
+    if os.environ.get("ASR_DEMO_ITN", "") not in ("", "0"):
+        from itn import itn_pl
+
+        converted = itn_pl(text)
+        if converted != text:
+            print(f"[python] itn: {text!r} -> {converted!r}", flush=True)
+        text = converted
     return text

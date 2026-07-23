@@ -29,6 +29,9 @@ augment:
   noise_prob: 0.9
   rir_prob: 0.5
   snr_db: [5, 25]
+  speed_perturb: [0.9, 1.0, 1.1]  # perturbacja tempa (Kaldi); ~2/3 sampli omija
+                                  # feature_cache (mel on-the-fly) -> wiekszy koszt
+                                  # dataloadera; usun linie zeby wylaczyc
 
 model:
   size: big
@@ -50,6 +53,7 @@ training:
   accum_grad: 1
   amp_dtype: bf16
   ctc_weight: 0.3
+  ctc_label_smoothing: 0.05      # wygladzanie tylko aux CTC (RNN-T bez zmian)
   log_every: 50
   eval_every_epochs: 1
   save_every_steps: 1000
