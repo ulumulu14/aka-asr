@@ -120,6 +120,24 @@ def _features_from_waveform(
     return cmvn(extractor.features_from_waveform(wav_t))
 
 
+_fixer_cache: dict[str, object] = {}
+
+
+def _apply_fixer(model_dir: str, text: str) -> str:
+    """Opcjonalna post-korekcja ASR (ASR_DEMO_FIXER). Ta sama klasa AutoFixer co w testach."""
+    fx = _fixer_cache.get(model_dir)
+    if fx is None:
+        from autofixer.fixer import AutoFixer
+
+        fx = AutoFixer(model_dir, device=DEVICE)
+        _fixer_cache[model_dir] = fx
+        print(f"[python] autofixer zaladowany z {model_dir}", flush=True)
+    corrected = fx.correct(text)
+    if corrected != text:
+        print(f"[python] autofixer: {text!r} -> {corrected!r}", flush=True)
+    return corrected
+
+
 def transcribe(samples: np.ndarray, sample_rate: int, checkpoint_path: str) -> str:
     """
     Entry point wolany z Rusta.
@@ -157,4 +175,7 @@ def transcribe(samples: np.ndarray, sample_rate: int, checkpoint_path: str) -> s
         f"{len(hyp_ids[0])} tokenow, {feats.shape[0]} ramek",
         flush=True,
     )
+    fixer_dir = os.environ.get("ASR_DEMO_FIXER")
+    if fixer_dir:
+        text = _apply_fixer(fixer_dir, text)
     return text
