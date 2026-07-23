@@ -46,7 +46,7 @@ python utils/datasets_conversion/hf2json.py yodas --shards 10   # --shards ogran
 
 Manifesty lądują w `data/` jako `{train,val}_manifest_<źródło>.jsonl`.
 Manifesty z różnych źródeł można po prostu skonkatenować (`cat a.jsonl b.jsonl > train.jsonl`)
-— tak powstają `train_manifest_all.jsonl` / `val_manifest_all.jsonl` używane w `configs/config_*_all.yaml`.
+- tak powstają `train_manifest_all.jsonl` / `val_manifest_all.jsonl` używane w `configs/config_*_all.yaml`.
 Pełną regenerację całego miksu na maszynie treningowej automatyzuje `runpod/bootstrap.sh`
 (patrz `runpod/README.md`).
 
@@ -85,13 +85,13 @@ Rozmiary modelu: `smol` (debug), `mid` (~30M, domyślny), `big` (`--model_size` 
 Metryki: `tensorboard --logdir <ckpt_dir>/tb`. Log tekstowy: `<ckpt_dir>/train.log`.
 
 Checkpointy (`best.pt`, `epoch_NNNN.pt`, rolling `last.pt` co `save_every_steps` kroków)
-zawierają wagi, stan optymalizatora/schedulera oraz architekturę, tokenizer i config audio —
+zawierają wagi, stan optymalizatora/schedulera oraz architekturę, tokenizer i config audio -
 model da się odtworzyć z samego `.pt`.
 
 ## Augmenacja (oprócz noise i RIR), tricki treningowe i narzędzia
 
 - **Speed perturbation** (Kaldi 0.9/1.0/1.1×): `augment.speed_perturb: [0.9, 1.0, 1.1]`
-  w configu (sample bez czynnika 1.0 omijają feature_cache — wolniejszy DataLoader).
+  w configu (sample bez czynnika 1.0 omijają feature_cache - wolniejszy DataLoader).
 - **Label smoothing aux CTC**: `training.ctc_label_smoothing: 0.05`.
 - **Uśrednianie checkpointów** (tanie +0.2–0.5 pp WER, nie do `--resume`):
   ```bash
@@ -105,7 +105,7 @@ model da się odtworzyć z samego `.pt`.
   ```bash
   python utils/pseudo_label.py --checkpoint <ckpt> --manifest <nieopisane.jsonl> --out data/pseudo.jsonl
   ```
-- **ITN** — liczby słowami → cyfry, tylko warstwa wyświetlania (`itn.py`);
+- **ITN** - liczby słowami → cyfry, tylko warstwa wyświetlania (`itn.py`);
   w demo apce włącza ją `ASR_DEMO_ITN=1`.
 
 ## Podgląd architektury
