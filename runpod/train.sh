@@ -13,6 +13,15 @@ CONFIG="${CONFIG:-configs/config_runpod_mid_all.yaml}"
 LOG="${LOG:-/workspace/aka-asr/train_runpod.log}"
 cd "$REPO_DIR"
 
+# Guard przed podwojnym startem: poprzedni trening (setsid+nohup) zyje w tle,
+# a drugi proces na GPU w trybie EXCLUSIVE dostaje "device busy or unavailable"
+if pgrep -f "python train.py" >/dev/null; then
+  echo "!! Trening juz dziala:"
+  pgrep -af "python train.py"
+  echo "   Podglad: tail -f $LOG   |   ubicie: pkill -f 'python train.py'"
+  exit 1
+fi
+
 RESUME_ARG=""
 [ -n "${RESUME:-}" ] && RESUME_ARG="--resume $RESUME"
 
