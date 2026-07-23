@@ -35,7 +35,9 @@ log() { echo -e "\n\033[1;36m==> $*\033[0m"; }
 log "Instaluje zaleznosci systemowe i pythonowe"
 apt-get update -qq && apt-get install -y -qq ffmpeg unzip wget >/dev/null
 pip install -q -r requirements.txt
-pip install -q "huggingface_hub[hf_transfer]" datasets pyarrow soundfile
+# hf_transfer jawnie -- extra huggingface_hub[hf_transfer] usuniety w hub 1.x
+# (pip warningowal, akcelerator sie nie instalowal, a HF_HUB_ENABLE_HF_TRANSFER=1 rzucalby blad)
+pip install -q hf_transfer huggingface_hub datasets pyarrow soundfile
 
 if [ -z "${HF_TOKEN:-}" ]; then
   echo "!! HF_TOKEN nie ustawiony -- BIGOS (gated) sie nie pobierze. Ustaw i uruchom ponownie."
