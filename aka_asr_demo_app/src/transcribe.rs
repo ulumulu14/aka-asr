@@ -56,7 +56,7 @@ pub fn run(
     let script_source = std::fs::read_to_string(&script_abs)
         .with_context(|| format!("nie udało się odczytać {}", script_abs.display()))?;
 
-    // transcriber.py leży w asr_demo_app/ — repo z modelem to katalog wyżej
+    // transcriber.py leży w aka_asr_demo_app/ — repo z modelem to katalog wyżej
     let repo_root = script_abs
         .parent()
         .and_then(Path::parent)

@@ -1,4 +1,4 @@
-# asr_demo_app
+# aka_asr_demo_app
 
 Konsolowe demo ASR w Rust: nagrywa audio z mikrofonu i transkrybuje je checkpointem
 ConformerTransducer wytrenowanym przez `train.py` z tego repo.
@@ -14,7 +14,7 @@ tokenizer i config audio odtwarza z metadanych zapisanych w checkpointcie (`mode
 ## Struktura
 
 ```
-asr_demo_app/
+aka_asr_demo_app/
 ├── Cargo.toml
 ├── transcriber.py          # inferencja: checkpoint train.py -> tekst
 └── src/
@@ -57,7 +57,7 @@ PYO3_PYTHON=/home/arekk/workspace/aka-asr/.venv/bin/python cargo build --release
 
 ```bash
 cargo build --release
-# binarka: target/release/asr_demo_app
+# binarka: target/release/aka_asr_demo_app
 ```
 
 ## Użycie
@@ -66,32 +66,32 @@ Domyślnie (bez `--checkpoint`) apka bierze **najnowszy** `best.pt` - a gdy żad
 `best.pt` nie ma, najnowszy `last.pt` - z `<repo>/checkpoints/*/*/`.
 
 ```bash
-cd asr_demo_app
+cd aka_asr_demo_app
 
 # nagraj (Ctrl+C kończy) i przetranskrybuj najnowszym checkpointem
-./target/release/asr_demo_app
+./target/release/aka_asr_demo_app
 
 # nagraj 10 sekund, konkretny checkpoint
-./target/release/asr_demo_app -t 10 -c ../checkpoints/conformer_mid/<exp>/best.pt
+./target/release/aka_asr_demo_app -t 10 -c ../checkpoints/conformer_mid/<exp>/best.pt
 
 # wybierz urządzenie po nazwie, nie zapisuj WAV-a
-./target/release/asr_demo_app -d "Scarlett" --no-save
+./target/release/aka_asr_demo_app -d "Scarlett" --no-save
 
 # tylko nagrywanie, bez transkrypcji (stare zachowanie)
-./target/release/asr_demo_app --no-transcribe -o nagranie.wav
+./target/release/aka_asr_demo_app --no-transcribe -o nagranie.wav
 
 # transkrypcja istniejącego pliku WAV (bez mikrofonu)
-./target/release/asr_demo_app --input-wav test.wav --no-save
+./target/release/aka_asr_demo_app --input-wav test.wav --no-save
 
 # lista urządzeń wejściowych
-./target/release/asr_demo_app --list-devices
+./target/release/aka_asr_demo_app --list-devices
 ```
 
 Inferencja idzie domyślnie na **CPU** (żeby nie wchodzić w drogę treningowi na GPU;
 mid dekoduje ~5 s audio w ~0.2 s). Wymuszenie GPU:
 
 ```bash
-ASR_DEMO_DEVICE=cuda ./target/release/asr_demo_app
+ASR_DEMO_DEVICE=cuda ./target/release/aka_asr_demo_app
 ```
 
 ## Test bez mikrofonu
@@ -99,13 +99,13 @@ ASR_DEMO_DEVICE=cuda ./target/release/asr_demo_app
 Cały pipeline (Rust -> PyO3 -> checkpoint) można sprawdzić na istniejącym pliku:
 
 ```bash
-./target/release/asr_demo_app --input-wav test.wav --no-save
+./target/release/aka_asr_demo_app --input-wav test.wav --no-save
 ```
 
 Sama ścieżka Pythonowa, bez Rusta:
 
 ```bash
-cd asr_demo_app
+cd aka_asr_demo_app
 ../.venv/bin/python -c "
 import soundfile as sf, sys; sys.path.insert(0, '.')
 import transcriber
@@ -125,7 +125,7 @@ sudo apt install libasound2-plugins   # moduł pcm_pulse dla ALSA
 ```
 
 Routing `default` -> Pulse jest już skonfigurowany w `~/.asoundrc`. Po instalacji
-`./target/release/asr_demo_app --list-devices` powinno pokazać działający `default`.
+`./target/release/aka_asr_demo_app --list-devices` powinno pokazać działający `default`.
 
 ## Format danych przekazywanych do Pythona
 

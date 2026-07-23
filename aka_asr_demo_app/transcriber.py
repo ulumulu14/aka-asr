@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 # Fallback dla uruchomień poza transcribe.rs (tam sys.path ustawia Rust):
-# transcriber.py lezy w asr_demo_app/, repo z modelem to katalog wyzej
+# transcriber.py lezy w aka_asr_demo_app/, repo z modelem to katalog wyzej
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
