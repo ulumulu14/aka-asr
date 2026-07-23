@@ -6,7 +6,7 @@ ConformerTransducer wytrenowanym przez `train.py` z tego repo.
 **Pipeline:** cpal capture -> bufor f32 -> numpy.ndarray (przez PyO3) -> `transcriber.py`
 (mono -> resample 16 kHz -> preemfaza -> log-mel -> CMVN -> greedy transducer decode) -> tekst -> stdout.
 
-Preprocessing i dekodowanie są **identyczne z walidacją treningową** — `transcriber.py`
+Preprocessing i dekodowanie są **identyczne z walidacją treningową** - `transcriber.py`
 importuje `model.py`, `preprocessing.py` i `greedy_decode_batch` z `train.py`, a architekturę,
 tokenizer i config audio odtwarza z metadanych zapisanych w checkpointcie (`model_cfg`,
 `tokenizer`, `audio_cfg`). Żaden config YAML nie jest potrzebny.
@@ -28,7 +28,7 @@ asr_demo_app/
 ### Build (Rust)
 
 - Toolchain Rust (stable)
-- Python ≥ 3.9 z bibliotekami dev — pyo3 0.26 linkuje się z `libpython`
+- Python ≥ 3.9 z bibliotekami dev - pyo3 0.26 linkuje się z `libpython`
   (repo używa `.venv` z Pythonem 3.14; pyo3 < 0.26 nie wspiera 3.14):
   - **Linux**: `python3-dev` (Debian/Ubuntu) lub `python3-devel` (Fedora)
   - **Windows**: oficjalny installer Pythona
@@ -37,10 +37,10 @@ asr_demo_app/
 ### Runtime (Python)
 
 Interpreter, którego pyo3 użyje w runtime, musi mieć pakiety repo
-(`pip install -r ../requirements.txt` — kluczowe: torch, torchaudio, numpy, tqdm, click, pyyaml).
+(`pip install -r ../requirements.txt` - kluczowe: torch, torchaudio, numpy, tqdm, click, pyyaml).
 
 `transcribe.rs` sam dokleja do `sys.path`:
-- site-packages venv — `$VIRTUAL_ENV`, a bez niego `<repo>/.venv`
+- site-packages venv - `$VIRTUAL_ENV`, a bez niego `<repo>/.venv`
   (embedded interpreter pyo3 nie aktywuje venv samodzielnie),
 - katalog główny repo (importy `model` / `preprocessing` / `train`).
 
@@ -62,8 +62,8 @@ cargo build --release
 
 ## Użycie
 
-Domyślnie (bez `--checkpoint`) apka bierze **najnowszy** `best.pt` — a gdy żadnego
-`best.pt` nie ma, najnowszy `last.pt` — z `<repo>/checkpoints/*/*/`.
+Domyślnie (bez `--checkpoint`) apka bierze **najnowszy** `best.pt` - a gdy żadnego
+`best.pt` nie ma, najnowszy `last.pt` - z `<repo>/checkpoints/*/*/`.
 
 ```bash
 cd asr_demo_app
@@ -116,7 +116,7 @@ print(transcriber.transcribe(data, sr, '../checkpoints/conformer_mid/<exp>/best.
 
 ## Mikrofon w WSL2
 
-cpal na Linuxie mówi przez ALSA, a w WSL2 nie ma karty dźwiękowej — mikrofon
+cpal na Linuxie mówi przez ALSA, a w WSL2 nie ma karty dźwiękowej - mikrofon
 z Windows jest forwardowany przez serwer PulseAudio WSLg (`PULSE_SERVER` ustawia
 system, źródło: `PulseAudioRDPSource`). Żeby ALSA go widziała:
 
@@ -141,7 +141,7 @@ Funkcja `transcribe(samples, sample_rate, checkpoint_path)` dostaje:
 - **Streaming inference**: chunki w trakcie nagrywania zamiast całego bufora po Ctrl+C.
   Wymaga causal encodera (model wspiera `causal_encoder=True`, obecne checkpointy są non-causal).
 - **VAD przed inferencją**: webrtcvad albo silero-vad, żeby ciąć ciszę.
-- **Beam search**: obecnie greedy — beam z prefix merge poprawiłby WER o kilka punktów.
+- **Beam search**: obecnie greedy - beam z prefix merge poprawiłby WER o kilka punktów.
 - **Serwer**: model jest cache'owany per proces; tryb interaktywny (pętla nagraj->dekoduj)
   amortyzowałby ~1 s ładowania checkpointu.
 
