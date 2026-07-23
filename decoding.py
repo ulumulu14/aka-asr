@@ -2,7 +2,7 @@
 """
 Dekodowanie RNN-T ponad greedy: beam search z opcjonalna plytka fuzja LM.
 
-Narzedzie ewaluacyjne/inferencyjne -- walidacja treningowa zostaje na szybkim
+Narzedzie ewaluacyjne/inferencyjne - walidacja treningowa zostaje na szybkim
 greedy z train.py. Beam z logsumexp-merge identycznych hipotez, limit emisji
 na ramke jak w greedy (max_symbols_per_step).
 
@@ -38,7 +38,6 @@ class _Hyp:
 
 
 def _merge(pool: dict[tuple[int, ...], _Hyp], cand: _Hyp) -> None:
-    """Scala hipotezy o identycznych tokenach (logsumexp po sciezkach w latticu)."""
     ex = pool.get(cand.tokens)
     if ex is None:
         pool[cand.tokens] = cand
@@ -110,7 +109,7 @@ def beam_search_decode_batch(
                         s = h.logp + score + length_bonus
                         if lm_lp is not None:
                             s += lm_weight * float(lm_lp[tok])
-                        # g rodzica to placeholder -- przeliczany nizej dla przezywajacych
+                        # g rodzica to placeholder - przeliczany nizej dla przezywajacych
                         _merge(cands, _Hyp(h.tokens + (tok,), s, h.g))
 
                 active = sorted(cands.values(), key=lambda h: h.logp, reverse=True)[:beam_size]

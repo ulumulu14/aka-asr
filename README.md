@@ -1,12 +1,12 @@
 # aka-asr
 
-Polski ASR Conformer-Transducer (RNN-T), trenowany od zera na miksie polskich
+Polski ASR Conformer-Transducer (RNN-T), trenowany od zera na połączeni polskich
 korpusów: Mozilla Common Voice PL, Multilingual LibriSpeech (MLS) Polish, BIGOS v2
 (Clarin studio/mobile, M-AILABS, FLEURS, korpusy PWR), VoxPopuli PL (Parlament EU)
-oraz YODAS PL (manualne napisy z YouTube) — łącznie ~440 h.
+oraz YODAS PL — łącznie ~440 h.
 Architektura: Conformer encoder + causal-Conformer predictor + joint network,
 loss RNN-T (torchaudio) z pomocniczym CTC na encoderze. Opcjonalna augmentacja
-waveformu (szum + RIR, OpenSLR 28) — patrz sekcja `augment` w configach.
+wave'a (szum + RIR, OpenSLR 28) - patrz sekcja `augment` w configach.
 
 ## Instalacja
 

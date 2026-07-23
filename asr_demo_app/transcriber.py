@@ -1,5 +1,5 @@
 """
-transcriber.py — preprocessing audio + inferencja ConformerTransducer (RNN-T).
+transcriber.py - preprocessing audio + inferencja ConformerTransducer (RNN-T).
 
 Wywoływane z Rusta przez PyO3:
     transcribe(samples: np.ndarray[frames, channels], sample_rate: int, ckpt_path: str) -> str

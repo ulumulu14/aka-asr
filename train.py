@@ -225,9 +225,11 @@ def greedy_decode_batch(
     max_symbols_per_step: int = 3,
     return_scores: bool = False,
 ) -> list[list[int]] | tuple[list[list[int]], list[float]]:
-    """return_scores=True zwraca tez sredni log-prob wyemitowanych tokenow na
-    sample (proxy pewnosci, np. do filtrowania pseudo-labeli); pusta hipoteza
-    dostaje -inf."""
+    """
+    return_scores=True zwraca tez sredni log-prob wyemitowanych tokenow na
+    sample (proxy pewnosci, np. do filtrowania pseudo-labeli). Pusta hipoteza
+    dostaje -inf.
+    """
     model.eval()
     device = audio_features.device
     B = audio_features.shape[0]
@@ -497,7 +499,7 @@ def train(
                     target_lengths = batch["target_lengths"].to(device, non_blocking=True)
                     audio_padding_mask = batch["audio_padding_mask"].to(device, non_blocking=True)
 
-                    # Forward w AMP; loss liczony w fp32
+                    # Forward w AMP, loss liczony w fp32
                     with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
                         logits, enc_out = model(
                             audio, labels,
@@ -553,7 +555,7 @@ def train(
                     scaler.scale(loss / cfg.accum_grad).backward()
                 except RuntimeError as e:
                     # Skrajnie dlugi/gesty batch rozdyma tensor jointa (B,T',U,J) ponad
-                    # VRAM. Zamiast ubijac cala sesje -- pomijamy batch, czyscimy cache
+                    # VRAM. Zamiast ubijac cala sesje - pomijamy batch, czyscimy cache
                     # i lecimy dalej. Inne RuntimeError przepuszczamy.
                     if "out of memory" not in str(e).lower():
                         raise
@@ -759,7 +761,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     # Datasety + loadery
     audio_cfg = AudioConfig()
 
-    # Augmentacja waveformu (szum + RIR) -- tylko train
+    # Augmentacja audio (szum + RIR) - tylko train
     aug_cfg = config.get("augment") or {}
     wave_aug = None
     wave_aug_prob = float(aug_cfg.get("prob", 0.4))
@@ -835,7 +837,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     )
     logger.info(f"Parametry modelu: {sum(p.numel() for p in model.parameters()):,}")
 
-    # Metadane w checkpointcie -- pozwalaja odtworzyc model bez tego configu
+    # Metadane w checkpointcie - pozwalaja odtworzyc model bez tego configu
     meta = {
         "model_cfg": model_cfg,
         "tokenizer": tokenizer_meta,

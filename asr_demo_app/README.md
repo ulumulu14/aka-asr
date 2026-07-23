@@ -3,8 +3,8 @@
 Konsolowe demo ASR w Rust: nagrywa audio z mikrofonu i transkrybuje je checkpointem
 ConformerTransducer wytrenowanym przez `train.py` z tego repo.
 
-**Pipeline:** cpal capture → bufor f32 → numpy.ndarray (przez PyO3) → `transcriber.py`
-(mono → resample 16 kHz → preemfaza → log-mel → CMVN → greedy transducer decode) → tekst → stdout.
+**Pipeline:** cpal capture -> bufor f32 -> numpy.ndarray (przez PyO3) -> `transcriber.py`
+(mono -> resample 16 kHz -> preemfaza -> log-mel -> CMVN -> greedy transducer decode) -> tekst -> stdout.
 
 Preprocessing i dekodowanie są **identyczne z walidacją treningową** — `transcriber.py`
 importuje `model.py`, `preprocessing.py` i `greedy_decode_batch` z `train.py`, a architekturę,
@@ -96,7 +96,7 @@ ASR_DEMO_DEVICE=cuda ./target/release/asr_demo_app
 
 ## Test bez mikrofonu
 
-Cały pipeline (Rust → PyO3 → checkpoint) można sprawdzić na istniejącym pliku:
+Cały pipeline (Rust -> PyO3 -> checkpoint) można sprawdzić na istniejącym pliku:
 
 ```bash
 ./target/release/asr_demo_app --input-wav test.wav --no-save
@@ -124,7 +124,7 @@ system, źródło: `PulseAudioRDPSource`). Żeby ALSA go widziała:
 sudo apt install libasound2-plugins   # moduł pcm_pulse dla ALSA
 ```
 
-Routing `default` → Pulse jest już skonfigurowany w `~/.asoundrc`. Po instalacji
+Routing `default` -> Pulse jest już skonfigurowany w `~/.asoundrc`. Po instalacji
 `./target/release/asr_demo_app --list-devices` powinno pokazać działający `default`.
 
 ## Format danych przekazywanych do Pythona
@@ -136,13 +136,13 @@ Funkcja `transcribe(samples, sample_rate, checkpoint_path)` dostaje:
 - `sample_rate`: `int`, w Hz, natywny dla urządzenia (resampling do 16 kHz robi Python)
 - `checkpoint_path`: `str`, ścieżka do checkpointa `.pt` z `train.py`
 
-## Co dalej (typowe rozszerzenia)
+## Potencjalnie TODO
 
 - **Streaming inference**: chunki w trakcie nagrywania zamiast całego bufora po Ctrl+C.
   Wymaga causal encodera (model wspiera `causal_encoder=True`, obecne checkpointy są non-causal).
 - **VAD przed inferencją**: webrtcvad albo silero-vad, żeby ciąć ciszę.
 - **Beam search**: obecnie greedy — beam z prefix merge poprawiłby WER o kilka punktów.
-- **Serwer**: model jest cache'owany per proces; tryb interaktywny (pętla nagraj→dekoduj)
+- **Serwer**: model jest cache'owany per proces; tryb interaktywny (pętla nagraj->dekoduj)
   amortyzowałby ~1 s ładowania checkpointu.
 
 ## Wersje crate'ów
