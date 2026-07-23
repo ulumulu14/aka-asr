@@ -25,10 +25,10 @@ runs/
 *:Zone.Identifier
 
 # Demo app (Rust)
-asr_demo_app/target/
-asr_demo_app/*.exe
-asr_demo_app/recordings/
-asr_demo_app/*.wav
+aka_asr_demo_app/target/
+aka_asr_demo_app/*.exe
+aka_asr_demo_app/recordings/
+aka_asr_demo_app/*.wav
 
 # Claude Code (osobiste)
 .claude/settings.local.json
