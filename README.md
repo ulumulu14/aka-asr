@@ -3,7 +3,7 @@
 Polski ASR Conformer-Transducer (RNN-T), trenowany od zera na połączonych polskich
 korpusach: Mozilla Common Voice PL, Multilingual LibriSpeech (MLS) Polish, BIGOS v2
 (Clarin studio/mobile, M-AILABS, FLEURS, korpusy PWR), VoxPopuli PL (Parlament EU)
-oraz YODAS PL, łącznie ~440 h.
+oraz YODAS PL, łącznie ~440 h audio.
 
 Architektura: Conformer encoder + causal-Conformer predictor + joint network,
 loss RNN-T (torchaudio) z pomocniczym CTC na encoderze. Opcjonalna augmentacja
