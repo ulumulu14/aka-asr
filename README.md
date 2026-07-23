@@ -87,7 +87,7 @@ Checkpointy (`best.pt`, `epoch_NNNN.pt`, rolling `last.pt` co `save_every_steps`
 zawierają wagi, stan optymalizatora/schedulera oraz architekturę, tokenizer i config audio —
 model da się odtworzyć z samego `.pt`.
 
-## Tricki treningowe i narzędzia
+## Augmenacja (oprócz noise i RIR), tricki treningowe i narzędzia
 
 - **Speed perturbation** (Kaldi 0.9/1.0/1.1×): `augment.speed_perturb: [0.9, 1.0, 1.1]`
   w configu (sample bez czynnika 1.0 omijają feature_cache — wolniejszy DataLoader).

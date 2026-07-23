@@ -259,7 +259,7 @@ class ConformerAudioEncoder(nn.Module):
         if key_padding_mask is not None and key_padding_mask.shape[1] != x.shape[1]:
             raise ValueError(
                 f"key_padding_mask ma dlugosc {key_padding_mask.shape[1]}, "
-                f"a wyjscie subsamplingu {x.shape[1]} -- maska musi byc policzona "
+                f"a wyjscie subsamplingu {x.shape[1]} - maska musi byc policzona "
                 f"po subsamplingu (subsampled_length)"
             )
         if self.pos_enc is not None:
