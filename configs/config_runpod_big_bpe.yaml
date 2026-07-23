@@ -1,0 +1,62 @@
+# Trening na RunPodzie: big (~130M param), pelny miks + augmentacja, tokenizer BPE.
+# Wariant config_runpod_big_all.yaml z tokenizerem BPE (sentencepiece) zamiast char.
+#
+#   cd /workspace/aka-asr
+#   python train.py configs/config_runpod_big_bpe.yaml
+#   python train.py configs/config_runpod_big_bpe.yaml --resume /workspace/aka-asr/checkpoints/conformer_big/<exp>/last.pt
+#
+# WYMAGA pliku bpe_pl.model w repo (wytrenowany utils/train_bpe.py, vocab 512,
+# dojezdza na pod przez git -- wyjatek w .gitignore). sentencepiece z requirements.txt.
+# Dane: patrz runpod/README.md.
+
+data:
+  train_manifest_path: /workspace/aka-asr/data/train_manifest_all.jsonl
+  val_manifest_path: /workspace/aka-asr/data/val_manifest_all.jsonl
+  max_audio_len: 20.0
+  min_audio_len: 0.5
+  feature_cache_dir: /workspace/aka-asr/data/features_cache
+
+tokenizer:
+  type: bpe
+  bpe_model_path: bpe_pl.model    # sciezka wzgledna repo (CWD=/workspace/aka-asr na
+                                  # podzie, root repo lokalnie) -> demo apka odtwarza
+                                  # tokenizer z metadanych checkpointu po tej sciezce
+
+augment:
+  noise_dir: /workspace/aka-asr/data/RIRS_NOISES/pointsource_noises
+  rir_dir: /workspace/aka-asr/data/RIRS_NOISES/simulated_rirs
+  prob: 0.4
+  noise_prob: 0.9
+  rir_prob: 0.5
+  snr_db: [5, 25]
+
+model:
+  size: big
+  dropout: 0.1
+
+training:
+  epochs: 30
+  batch_size: 128
+  max_batch_duration: 450.0      # jak w wariancie char: BPE-512 NIE zwieksza VRAM
+                                 # jointa. Dominuje tensor (B,T',U,640); U spada
+                                 # ~2,1x (subwordy dluzsze od znakow), co znosi
+                                 # wzrost vocab 37->513. Zmierzony koszt ~0,8x char.
+                                 # try/except OOM w petli pomija skrajny batch.
+  n_workers: 12
+  lr: 0.0007
+  weight_decay: 0.000001
+  warmup_steps: 4000
+  grad_clip: 1.0
+  accum_grad: 1
+  amp_dtype: bf16
+  ctc_weight: 0.3
+  log_every: 50
+  eval_every_epochs: 1
+  save_every_steps: 1000
+  keep_last: 3
+  wer_max_samples: 500
+  max_symbols_per_step: 3
+  compile: false
+  tensorboard: true
+  ckpt_root: /workspace/aka-asr/checkpoints
+  seed: 42
