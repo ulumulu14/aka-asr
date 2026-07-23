@@ -63,7 +63,10 @@ if [ ! -f "$DATA_DIR/train_manifest_mls.jsonl" ]; then
   log "MLS Polish -- pobieram i rozpakowuje"
   if [ ! -d "$DATA_DIR/mls_polish/train" ]; then
     wget -q --show-progress -O "$DATA_DIR/mls_polish.tar.gz" "$MLS_URL"
-    tar -xzf "$DATA_DIR/mls_polish.tar.gz" -C "$DATA_DIR"
+    # --no-same-owner: na network volume chown na uid z archiwum failuje (Invalid
+    # argument) -> tar konczy exit!=0 -> set -e ubijaloby bootstrap. Pliki i tak sa
+    # wypakowane (chown jest po zapisie), wiec ownership pomijamy.
+    tar --no-same-owner -xzf "$DATA_DIR/mls_polish.tar.gz" -C "$DATA_DIR"
     rm -f "$DATA_DIR/mls_polish.tar.gz"
   fi
   python utils/datasets_conversion/librispeech2json.py "$DATA_DIR/mls_polish" \
