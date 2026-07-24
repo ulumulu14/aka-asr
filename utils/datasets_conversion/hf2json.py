@@ -182,7 +182,11 @@ def convert_bigos(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------- VoxPopuli
 
 VOXPOPULI_REPO = "facebook/voxpopuli"
-VOXPOPULI_PARQUET_REV = "refs/convert/parquet"
+# PRZYPIETY commit brancha refs/convert/parquet (stan 2026-07-11). Sam branch jest
+# MUTOWALNY -- regeneracja po 2026-07-11 zepsula normalized_text dla pl (diakrytyki
+# zamienione na "_"), co wykrylismy dopiero w targetach treningu. Nie wracac do
+# "refs/convert/parquet" bez sprawdzenia tekstu!
+VOXPOPULI_PARQUET_REV = "930c9a00c3aeff80a6b9fbb1175bcd07bf751cf8"
 
 
 def _voxpopuli_parquet_paths(split: str) -> list[str]:
@@ -237,7 +241,13 @@ def convert_voxpopuli(args: argparse.Namespace) -> None:
             ]
             for batch in pf.iter_batches(batch_size=64, columns=columns):
                 for row in batch.to_pylist():
-                    text = (row.get("normalized_text") or row.get("raw_text") or "").strip()
+                    text = (row.get("normalized_text") or "").strip()
+                    # zepsuta normalizacja pl podmienia diakrytyki na "_" -> raw_text
+                    # (normalize_text w treningu i tak zrobi lowercase)
+                    if "_" in text:
+                        text = (row.get("raw_text") or "").strip() or text
+                    if not text:
+                        text = (row.get("raw_text") or "").strip()
                     if not text:
                         continue
                     audio = row["audio"]
