@@ -108,6 +108,17 @@ model da się odtworzyć z samego `.pt`.
 - **ITN** - liczby słowami → cyfry, tylko warstwa wyświetlania (`itn.py`);
   w demo apce włącza ją `ASR_DEMO_ITN=1`.
 
+## Testy
+
+Wąski suite na deterministyczny rdzeń (metryki, tokenizery, normalizacja tekstu,
+front-end audio, smoke pipeline'u treningowego, round-trip checkpointu) — łapie
+ciche bugi kosztujące godziny GPU. Nie testuje zbieżności/WER treningu ani środowiska.
+
+```bash
+pip install -r requirements-dev.txt
+pytest                      # ~4 s, CPU, bez audio/GPU
+```
+
 ## Podgląd architektury
 
 ```bash
