@@ -916,6 +916,16 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     )
     logger.info(f"Parametry modelu: {sum(p.numel() for p in model.parameters()):,}")
 
+    # Blank-bias init (tylko swiezy trening): ujemny bias blanku w jointcie zniecha
+    # ca model do emitowania samego blanku na starcie. Wazne przy BPE -- krotkie U
+    # daje wysoki stosunek blank:token, przez co "emituj blank" jest silnym
+    # atraktorem (pusty greedy, val_WER~100% od ep0). 0.0 = bez zmiany.
+    blank_bias = float(config.get("model", {}).get("blank_bias_init", 0.0))
+    if resume_state is None and blank_bias != 0.0:
+        with torch.no_grad():
+            model.joint.out.bias[0] = blank_bias  # indeks 0 = blank
+        logger.info(f"Blank-bias init: joint.out.bias[blank]={blank_bias}")
+
     # Metadane w checkpointcie - pozwalaja odtworzyc model bez tego configu
     meta = {
         "model_cfg": model_cfg,
