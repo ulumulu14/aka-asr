@@ -52,8 +52,13 @@ training:
   grad_clip: 1.0
   accum_grad: 1
   amp_dtype: bf16
-  ctc_weight: 0.3
+  ctc_weight: 0.5                 # anty blank-collapse: mocniejszy sygnal alignmentu
+                                  # z aux CTC na encoderze (bylo 0.3; big lubil
+                                  # utykac w "emituj tylko blank" -- 2/3 runy)
   ctc_label_smoothing: 0.05      # wygladzanie tylko aux CTC (RNN-T bez zmian)
+  collapse_abort_epochs: 2       # jesli po 2 epokach WER wciaz ~100% -> abort
+                                  # (zdrowy run schodzi ponizej w ep. 0-1);
+                                  # przy collapse odpal ponownie (inna loteria RNG)
   log_every: 50
   eval_every_epochs: 1
   save_every_steps: 1000
