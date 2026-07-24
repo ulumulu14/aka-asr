@@ -59,6 +59,10 @@ def setup_logging(log_file: Path | None = None) -> None:
         logger.addHandler(file_handler)
 
 
+class CollapseAbort(Exception):
+    """RNN-T utknal w blank-collapse -- przerwij trening (patrz collapse_abort_epochs)."""
+
+
 @dataclass
 class TrainConfig:
     # Optimizer
@@ -100,6 +104,11 @@ class TrainConfig:
 
     # Dekodowanie podczas eval
     max_symbols_per_step: int = 3
+
+    # Anty blank-collapse: przerwij trening, jesli po >= N epokach val_WER
+    # wciaz ~100% (RNN-T utknal w "emituj tylko blank"; 0 = wylaczone).
+    # Zdrowe runy big+BPE schodza ponizej 100% juz w epoce 0-1.
+    collapse_abort_epochs: int = 0
 
     # Inne
     compile: bool = False
@@ -658,6 +667,19 @@ def train(
                     )
                     logger.info(f"Nowy najlepszy WER={best_wer:.2%} -- zapisano best.pt")
 
+                # Anty blank-collapse: po N epokach wciaz ~100% WER = RNN-T utknal
+                # w "emituj tylko blank" i nie wyjdzie. Zdrowy run schodzi ponizej
+                # 100% w epoce 0-1 -- przerywamy, zeby nie palic godzin na loterii.
+                if (
+                    cfg.collapse_abort_epochs > 0
+                    and epoch + 1 >= cfg.collapse_abort_epochs
+                    and best_wer >= 0.99
+                ):
+                    raise CollapseAbort(
+                        f"blank-collapse: best_WER={best_wer:.2%} po {epoch + 1} epokach "
+                        f">= progu {cfg.collapse_abort_epochs} -- przerywam (odpal ponownie)"
+                    )
+
                 # Last N checkpoints
                 save_ckpt(
                     ckpt_dir / f"epoch_{epoch:04d}.pt",
@@ -677,8 +699,11 @@ def train(
             f"Koniec treningu, najlepszy WER={best_wer:.2%} "
             f"(batchy pominietych przez OOM: {n_oom_skipped})"
         )
-    except KeyboardInterrupt:
-        logger.warning("Przerwano recznie -- zapisuje last.pt")
+    except (KeyboardInterrupt, CollapseAbort) as e:
+        if isinstance(e, CollapseAbort):
+            logger.warning(str(e))
+        else:
+            logger.warning("Przerwano recznie -- zapisuje last.pt")
         save_ckpt(
             ckpt_dir / "last.pt",
             model=model,
@@ -766,6 +791,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         keep_last=int(tr.get("keep_last", 3)),
         save_every_steps=int(tr.get("save_every_steps", 1000)),
         max_symbols_per_step=int(tr.get("max_symbols_per_step", 3)),
+        collapse_abort_epochs=int(tr.get("collapse_abort_epochs", 0)),
         compile=bool(tr.get("compile", False)),
         seed=int(tr.get("seed", 42)),
     )
