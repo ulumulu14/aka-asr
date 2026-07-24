@@ -1,0 +1,68 @@
+# Trening na RunPodzie: big (~130M param), pelny miks + augmentacja, tokenizer CHAR.
+# FALLBACK dla config_runpod_big_bpe.yaml, gdyby BPE dalej sie zapadalo:
+# char ma z natury nizszy stosunek blank:token (U ~2x dluzsze niz BPE), wiec mniej
+# podatny na blank-dominacje. mid byl char (WER 12,71%, zero collapse) -- to
+# przeskalowany, znany-dobry przepis. Bez bpe_pl.model (uzywa POLISH_ALPHABET).
+#
+#   cd /workspace/aka-asr
+#   python train.py configs/config_runpod_big_char.yaml
+#   python train.py configs/config_runpod_big_char.yaml --resume .../conformer_big/<exp>/last.pt
+#
+# Dane: patrz runpod/README.md.
+
+data:
+  train_manifest_path: /workspace/aka-asr/data/train_manifest_all.jsonl
+  val_manifest_path: /workspace/aka-asr/data/val_manifest_all.jsonl
+  max_audio_len: 20.0
+  min_audio_len: 0.5
+  feature_cache_dir: /workspace/aka-asr/data/features_cache
+
+tokenizer:
+  type: char                     # polski alfabet (POLISH_ALPHABET), vocab 36 (+blank)
+
+augment:
+  noise_dir: /workspace/aka-asr/data/RIRS_NOISES/pointsource_noises
+  rir_dir: /workspace/aka-asr/data/RIRS_NOISES/simulated_rirs
+  prob: 0.4
+  noise_prob: 0.9
+  rir_prob: 0.5
+  snr_db: [5, 25]
+  speed_perturb: [0.9, 1.0, 1.1]  # perturbacja tempa (Kaldi); ~2/3 sampli omija
+                                  # feature_cache (mel on-the-fly) -> wiekszy koszt
+                                  # dataloadera; usun linie zeby wylaczyc
+
+model:
+  size: big
+  dropout: 0.1
+  blank_bias_init: 0.0           # char nie potrzebuje (nizszy blank:token, mid nie
+                                  # collapsowal). Gdyby char-big tez pokazal pusty
+                                  # greedy w ep0-1 -> ustaw -2.0 do -4.0
+
+training:
+  epochs: 30
+  batch_size: 128
+  max_batch_duration: 450.0      # oryginalna kalibracja char-big na 80GB (BPE mial
+                                 # ten sam budzet, bo je ~0.8x tego VRAM-u).
+                                 # try/except OOM w petli pomija skrajny batch.
+  n_workers: 12
+  lr: 0.0004                     # ostroznie jak w wariancie BPE (big=131M wrazliwszy
+                                 # niz mid=29M, ktory dzialal na 1e-3); jak char-big
+                                 # bedzie stabilny, mozna podniesc dla szybkosci
+  weight_decay: 0.000001
+  warmup_steps: 4000
+  grad_clip: 1.0
+  accum_grad: 1
+  amp_dtype: bf16
+  ctc_weight: 0.3
+  ctc_label_smoothing: 0.05      # wygladzanie tylko aux CTC (RNN-T bez zmian)
+  collapse_abort_epochs: 4       # abort jesli po 4 epokach best_WER wciaz >=99%
+  log_every: 50
+  eval_every_epochs: 1
+  save_every_steps: 1000
+  keep_last: 3
+  wer_max_samples: 500
+  max_symbols_per_step: 3
+  compile: false
+  tensorboard: true
+  ckpt_root: /workspace/aka-asr/checkpoints
+  seed: 42
