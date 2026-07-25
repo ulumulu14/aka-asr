@@ -65,17 +65,21 @@ def token() -> str | None:
 
 
 def safe_extract_tar_gz(tar_path: Path, output_dir: Path) -> None:
-    """Rozpakowanie z ochrona przed path traversal (por. cv2json.py)."""
+    """
+    Rozpakowanie z ochrona przed path traversal (por. cv2json.py). Strumieniowo,
+    jeden przebieg: walidacja + ekstrakcja per member (getmembers()+extractall()
+    dekompresowaly gzip 2x i szly po cichu -- na network volume wygladalo jak zwis).
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     output_root = output_dir.resolve()
     with tarfile.open(tar_path, "r:gz") as tar:
-        for member in tar.getmembers():
+        for member in tqdm(tar, desc="ekstrakcja", unit="plik"):
             target = (output_dir / member.name).resolve()
             if os.path.commonpath([output_root, target]) != str(output_root):
                 raise RuntimeError(f"Niebezpieczna sciezka w archiwum: {member.name}")
             if member.issym() or member.islnk():
                 raise RuntimeError(f"Archiwum zawiera link: {member.name}")
-        tar.extractall(output_dir)
+            tar.extract(member, output_dir)
 
 
 def write_manifest(entries: list[dict], path: Path) -> None:
