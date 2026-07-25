@@ -23,19 +23,33 @@ Sanity: `grep -c . data/train_manifest_yodas.jsonl` (~2x po 20 shardach) i
 
 ---
 
-## 2. CV `validated` (czyste, bez przecieku dev/test)
+## 2. CV `validated` (czyste, bez przecieku dev/test) -- WPROST NA PODZIE
 
-`train` split (24,8k) -> `validated` (~70k, wszystkie zweryfikowane klipy). Wymaga
-**surowego korpusu Mozilli** (mp3 + tsv). **Lokalnie**:
+`train` split (24,8k) -> `validated` (~70k). Nie trzeba konwertowac lokalnie ani
+wysylac ~35k wav -- pobierz surowy tar wprost na pod (cv2json pisze sciezki
+/workspace/... przez p.resolve(), ffmpeg z bootstrapa):
 
 ```bash
-# 1. Pobierz CV pl 25.0 z commonvoice.mozilla.org (konto, jezyk polski) -> tar.gz
-# 2. Konwersja validated -> wav + manifest (absolutne sciezki przez cv2json)
-python utils/datasets_conversion/cv2json.py cv-corpus-25.0-2026-03-09-pl.tar.gz \
-    --split validated --jsonl --out data/cv_validated.jsonl \
-    --wav-dir data/cv-corpus-25.0-2026-03-09-pl/wav --workers 8
+# 1. Presigned URL przez API Mozilla Data Collective (API key z konta). Na podzie:
+cd /workspace/aka-asr/data
+RESP=$(curl -s -X POST \
+  "https://mozilladatacollective.com/api/datasets/cmqinmu2a00winq07gyrtri0q/download" \
+  -H "Authorization: Bearer <TWOJ_API_KEY>" -H "Content-Type: application/json")
+# wyciagnij downloadUrl (jq ALBO python, jesli brak jq):
+URL=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin)['downloadUrl'])")
+curl -o cv-26-pl.tar.gz "$URL"                      # ~kilka GB
 
-# 3. FILTR PRZECIEKU: wywal klipy z naszego val setu (inaczej validated je zawiera)
+# 2. NAJPIERW sprawdz strukture tara (nowe "scripted-speech" moze roznic sie od
+#    klasycznego cv-corpus; cv2json oczekuje validated.tsv + clips/*.mp3):
+tar tzf cv-26-pl.tar.gz | grep -E "validated.tsv|clips/" | head
+
+# 3. Konwersja validated (osobny wav-dir, zeby nie mieszac z CV 25.0 z zipa):
+cd /workspace/aka-asr
+python utils/datasets_conversion/cv2json.py data/cv-26-pl.tar.gz \
+    --split validated --jsonl --out data/cv_validated.jsonl \
+    --wav-dir data/cv-26-pl/wav --workers 12
+
+# 3. FILTR PRZECIEKU: wywal klipy z naszego val setu (validated je zawiera)
 python - <<'PY'
 import json, os
 val = {os.path.basename(json.loads(l)["audio_path"])
@@ -49,12 +63,14 @@ with open("data/train_manifest_cv.jsonl", "w", encoding="utf-8") as out:
             out.write(l); kept += 1
 print(f"train_manifest_cv: {kept} (usunieto {dropped} z val)")
 PY
+
+# 4. przesklej *_all z powiekszonym CV
+bash runpod/bootstrap.sh
 ```
-Zastępuje `train_manifest_cv.jsonl` (był 24,8k) większym, leakage-safe. **Wyślij na
-pod** NOWE wavy (validated minus już wysłane) + nowy `train_manifest_cv.jsonl`
-(zip jak w README, ścieżki remapowane na `/workspace/...`), potem `bootstrap.sh`
-przeskleja `*_all`. Caveat: filtr jest per-klip; nakładanie mówców (client_id)
-train/val nie jest usuwane -- lekko zawyża val, do dopracowania później.
+Caveat: filtr per-klip; nakladanie mowcow (client_id) train/val nie jest usuwane
+-- lekko zawyza val, do dopracowania pozniej. Alternatywa (najczystsza): dodac
+subkomende `cv` do hf2json.py i ciagnac validated z HF (mozilla-foundation/
+common_voice_25_0, gated) jak bigos/voxpopuli -- wtedy zero URL-i i tarow.
 
 ---
 
