@@ -25,8 +25,11 @@ def require_command(command: str) -> None:
 
 def safe_extract_tar_gz(tar_path: Path, output_dir: Path) -> None:
     """
-    Bezpieczne rozpakowanie tar.gz z ochroną przed path traversal,
-    np. plikami typu ../../evil.sh.
+    Bezpieczne rozpakowanie tar.gz z ochroną przed path traversal (../../evil.sh).
+
+    Strumieniowo, w JEDNYM przebiegu: walidacja i ekstrakcja per member. Stara wersja
+    (getmembers() + extractall()) dekompresowała gzip DWA razy, a pasek postępu obejmował
+    tylko walidację — realna ekstrakcja szła po cichu i na network volume wyglądała jak zwis.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     output_dir_resolved = output_dir.resolve()
@@ -34,7 +37,7 @@ def safe_extract_tar_gz(tar_path: Path, output_dir: Path) -> None:
     print("Starting archive extraction...")
 
     with tarfile.open(tar_path, "r:gz") as tar:
-        for member in tqdm(tar.getmembers()):
+        for member in tqdm(tar, desc="ekstrakcja", unit="plik"):
             target_path = (output_dir / member.name).resolve()
 
             if os.path.commonpath([output_dir_resolved, target_path]) != str(output_dir_resolved):
@@ -43,7 +46,7 @@ def safe_extract_tar_gz(tar_path: Path, output_dir: Path) -> None:
             if member.issym() or member.islnk():
                 raise RuntimeError(f"Archiwum zawiera link symboliczny/twardy: {member.name}")
 
-        tar.extractall(output_dir)
+            tar.extract(member, output_dir)
 
     print("Extraction finished.")
 
