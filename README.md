@@ -95,7 +95,19 @@ RESUME=/workspace/aka-asr/checkpoints/conformer_big/<exp>/last.pt \
 Pełny runbook (pobranie danych, TensorBoard, skalowanie miksu): `runpod/README.md`
 i `runpod/DATA_SCALING.md`.
 
-Rozmiary modelu: `smol` (debug), `mid` (~30M parametrów, domyślny), `big` (`--model_size` albo `model.size` w configu).
+Rozmiary modelu (`--model_size` albo `model.size` w configu): `smol` (debug),
+`mid` (~30M, domyślny), `big` (~131M), `custom` (~319M, do własnych eksperymentów).
+`custom` ma domyślne wymiary większe niż `big`, ale przede wszystkim jest do
+zdefiniowania przez użytkownika **bez ruszania kodu** - nadpisz dowolne pola w configu:
+
+```yaml
+model:
+  size: custom
+  dims: {enc_dim: 1024, enc_heads: 16, enc_layers: 24, joint_dim: 1024, pred_dim: 1024}
+```
+
+`model.dims` działa dla każdego rozmiaru (nadpisuje wybraną bazę); nieznane pole →
+błąd na starcie. Przy `--resume` architektura pochodzi z checkpointu (override ignorowany).
 
 Metryki: `tensorboard --logdir <ckpt_dir>/tb`. Log tekstowy: `<ckpt_dir>/train.log`.
 

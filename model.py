@@ -41,6 +41,21 @@ MODEL_SIZES = {
         pred_kernel=15,
         joint_dim=640,
     ),
+    # Rozmiar do definiowania przez uzytkownika repo: domyslnie WIEKSZY niz big,
+    # ale nadpisywalny w configu bez ruszania kodu -- `model.dims: {enc_dim: 1024,
+    # enc_layers: 24, ...}` podmienia dowolne pola (patrz train.py). enc_dim musi
+    # dzielic sie przez enc_heads (tu 768/12=64 na glowe).
+    "custom": dict(
+        enc_layers=20,
+        enc_dim=768,
+        enc_heads=12,
+        enc_kernel=31,
+        pred_layers=2,
+        pred_dim=768,
+        pred_heads=8,
+        pred_kernel=15,
+        joint_dim=768,
+    ),
 }
 
 
