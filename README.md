@@ -121,14 +121,14 @@ Opcje treningu istotne przy większych runach (wszystkie w configu):
   z napisami (np. YODAS, napisy manualne) - tryb czyszczenia: dekoduj wszystko
   (`--min-score -99`), potem wyrzuć sample z WER(hyp, napis) > progu.
   Szczegóły i komendy: `runpod/DATA_SCALING.md`.
-- **ITN** - liczby słowami → cyfry, tylko warstwa wyświetlania (`itn.py`);
-  w demo apce włącza ją `ASR_DEMO_ITN=1`.
 
 ## Postprocessing (autofixer + ITN)
 
 Po dekodowaniu tekst może przejść przez wspólny pipeline (`postprocessing.PostProcessor`,
 ta sama kolejność w demo i w ewaluacji): **AutoFixer** (fine-tune plT5 - korekcja błędów
-ASR + truecasing, np. "warszawa"→"Warszawa", + interpunkcja) → **ITN**. Przepływ:
+ASR + truecasing, np. "warszawa"→"Warszawa", + interpunkcja) → **ITN** (`itn.py` -
+liczby słowami → cyfry; tylko warstwa wyświetlania, nie stosować przy liczeniu WER,
+bo referencje są w formie mówionej). Przepływ:
 `autofixer/harvest.py` (pary {hipoteza, referencja z casingiem} z checkpointu ASR) →
 `autofixer/train_fixer.py` (fine-tune) → `autofixer/evaluate.py` (3 osie: WER akustyczny /
 interpunkcja F1 / casing recall). W demo włączane przez env: `ASR_DEMO_FIXER=<katalog
