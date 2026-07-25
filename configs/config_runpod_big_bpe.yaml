@@ -68,6 +68,11 @@ training:
                                   # ale mid=29M; big=131M jest wrazliwszy)
   weight_decay: 0.000001
   warmup_steps: 4000
+  lr_schedule: cosine            # zamiast Noama: liniowy warmup -> cosinusowy zjazd
+                                 # do floora w total_steps (= kroki/epoke x epochs).
+                                 # Noam scinal LR do znikomego na dlugim runie (100
+                                 # epok); cosine trzyma sensowny LR do konca.
+  min_lr_ratio: 0.1              # floor = 0.1 * peak (4e-5) -> pozne epoki wciaz ucza
   grad_clip: 1.0
   accum_grad: 1
   amp_dtype: bf16
