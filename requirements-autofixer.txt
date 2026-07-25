@@ -1,0 +1,6 @@
+# Zaleznosci autofixera (post-korektor ASR oparty na plT5).
+# NIE sa potrzebne do treningu ASR (na podzie ich nie instaluj).
+#   pip install -r requirements-autofixer.txt
+transformers>=4.40
+sentencepiece>=0.1.99
+protobuf

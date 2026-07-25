@@ -1,4 +1,5 @@
 """Repo root na sys.path, zeby testy importowaly moduly z korzenia (train, model, ...)."""
+
 import sys
 from pathlib import Path
 

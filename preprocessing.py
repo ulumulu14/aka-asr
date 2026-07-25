@@ -53,7 +53,7 @@ class AudioConfig:
     log_eps: float = 1e-10
 
 
-# Ekstrakcja cech
+# Ekstrakcja ficzerów
 
 
 class LogMelExtractor:
@@ -84,7 +84,7 @@ class LogMelExtractor:
     @staticmethod
     def _load_audio(wav_path: str | Path) -> tuple[torch.Tensor, int]:
         """
-        Zwraca (kanaly, T) float32 w [-1, 1]. Preferuje soundfile -- od
+        Zwraca (kanaly, T) float32 w [-1, 1]. Preferuje soundfile - od
         torchaudio 2.9 torchaudio.load wymaga torchcodec + systemowego ffmpeg.
         """
         if sf is not None:
@@ -337,8 +337,6 @@ def speed_perturb_waveform(wav: torch.Tensor, sample_rate: int, factor: float) -
 
 
 # Normalizacja tekstu
-
-
 def normalize_text(text: str) -> str:
     """lowercase, myslniki -> spacja, zbicie bialych znakow."""
     text = text.lower()
@@ -440,7 +438,7 @@ def _precompute_one(task: tuple[str, str]) -> None:
 class ASRDataset(Dataset):
     """
     Czyta manifest JSONL. Cechy laduje z cache .npy (cache_dir, patrz
-    precompute_features), a gdy pliku nie ma -- ekstraktuje on-the-fly.
+    precompute_features), a gdy pliku nie ma - ekstraktuje on-the-fly.
 
     Przy inicjalizacji odfiltrowuje sample:
     - poza zakresem [min_duration, max_duration]
@@ -464,7 +462,9 @@ class ASRDataset(Dataset):
         waveform_augment_prob: float = 0.4,
         speed_perturb_factors: list[float] | tuple[float, ...] | None = None,
         copies: int = 1,
+        return_index: bool = False,
     ):
+        self.return_index = return_index  # getitem dokłada 'index' (harvest: mapowanie na text_raw)
         manifest_path = Path(manifest_path).expanduser()
         with open(manifest_path, encoding="utf-8") as f:
             raw_entries = [json.loads(line) for line in f if line.strip()]
@@ -478,13 +478,15 @@ class ASRDataset(Dataset):
             ):
                 n_duration += 1
                 continue
-            text = normalize_text(e["text"])
+            raw_text = e["text"]
+            text = normalize_text(raw_text)
             if _DIGIT_RE.search(text):
                 n_digits += 1
                 continue
             if len(tokenizer.encode(text)) == 0:
                 n_empty += 1
                 continue
+            e["text_raw"] = raw_text  # oryginal z casingiem/interpunkcja (dla autofixera)
             e["text"] = text
             entries.append(e)
 
@@ -566,10 +568,14 @@ class ASRDataset(Dataset):
 
             tokens = self.tokenizer.encode(entry["text"])  # tekst znormalizowany w __init__
 
-            return {
+            item = {
                 "features": torch.from_numpy(feats),  # (T, n_mels)
                 "tokens": torch.tensor(tokens, dtype=torch.long),  # (U,)
             }
+            if self.return_index:
+                # realny idx uzytego entry (po retry wadliwych) -> harvest mapuje na text_raw
+                item["index"] = (idx + offset) % n
+            return item
 
         raise RuntimeError(
             f"{self._GETITEM_MAX_RETRIES} kolejnych sampli od idx={idx} nie dalo sie "
@@ -669,7 +675,7 @@ class CollateFn:
         T_sub_max = int(logit_lens.max())
         audio_padding_mask = torch.arange(T_sub_max)[None, :] >= logit_lens[:, None]
 
-        return {
+        out = {
             "audio_features": padded_feats,
             "label_tokens": pred_input,
             "targets": padded_tokens.to(torch.int32),
@@ -677,6 +683,9 @@ class CollateFn:
             "target_lengths": tok_lens,
             "audio_padding_mask": audio_padding_mask,
         }
+        if "index" in batch[0]:  # ASRDataset(return_index=True) -> harvest
+            out["indices"] = [b["index"] for b in batch]
+        return out
 
 
 def make_collate_fn(blank_id: int = 0) -> CollateFn:

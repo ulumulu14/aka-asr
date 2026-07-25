@@ -1,5 +1,6 @@
 """Deterministyczna matematyka front-endu: subsampling, CMVN, speed perturbation.
 Lapie 'przesunalem o ramke' / zle znormalizowalem cechy."""
+
 import json
 
 import numpy as np

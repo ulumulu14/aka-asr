@@ -1,5 +1,6 @@
 """Cosine LR scheduler: warmup -> peak -> cosinusowy zjazd do floora -> plasko.
 W przeciwienstwie do Noama LR nie zdycha na dlugich runach (floor = min_lr_ratio)."""
+
 import pytest
 import torch
 
@@ -21,8 +22,8 @@ def _run(warmup, total, min_ratio, steps):
 
 def test_cosine_warmup_peak_floor():
     lrs = _run(warmup=10, total=100, min_ratio=0.1, steps=120)
-    assert lrs[0] == pytest.approx(0.1, abs=1e-6)   # start warmupu (1/10)
-    assert lrs[9] == pytest.approx(1.0, abs=1e-6)   # koniec warmupu = peak
+    assert lrs[0] == pytest.approx(0.1, abs=1e-6)  # start warmupu (1/10)
+    assert lrs[9] == pytest.approx(1.0, abs=1e-6)  # koniec warmupu = peak
     assert max(lrs) == pytest.approx(1.0, abs=1e-6)  # nie przekracza peak
     assert lrs[99] == pytest.approx(0.1, abs=0.02)  # ~floor przy total
     assert lrs[115] == pytest.approx(0.1, abs=1e-9)  # floor po total (plasko)

@@ -1,5 +1,6 @@
 """Tokenizery: round-trip (encode->decode zachowuje tekst), blank=0 zarezerwowany.
 Gdyby BPE po cichu gubil diakrytyk, byloby to ciche pogorszenie jakosci."""
+
 from pathlib import Path
 
 import pytest

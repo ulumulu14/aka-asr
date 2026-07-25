@@ -1,5 +1,6 @@
 """compute_wer / _edit_distance -- na tej liczbie stoi kazda decyzja (best.pt,
 averaging, char vs BPE), wiec bug tutaj = ciche, bledne WER-y."""
+
 import pytest
 
 from train import _edit_distance, compute_wer
