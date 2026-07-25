@@ -465,6 +465,7 @@ class ASRDataset(Dataset):
         waveform_augment: "WaveformAugment | None" = None,
         waveform_augment_prob: float = 0.4,
         speed_perturb_factors: list[float] | tuple[float, ...] | None = None,
+        copies: int = 1,
     ):
         manifest_path = Path(manifest_path).expanduser()
         with open(manifest_path, encoding="utf-8") as f:
@@ -495,6 +496,15 @@ class ASRDataset(Dataset):
             f"(odrzucone: {n_duration} dlugosc, {n_digits} cyfry w tekscie, "
             f"{n_empty} pusta transkrypcja)"
         )
+
+        # Duplikacja danych (Kaldi-style): kazdy sample wystepuje `copies` razy
+        # na epoke, a KAZDA kopia dostaje niezaleznie losowana augmentacje on-the-fly
+        # (inne tempo/szum/SpecAugment). `entries * n` powiela referencje (tanio,
+        # bez kopiowania dictow ani audio). Tylko dla augment=True; N x kroki/epoke.
+        copies = max(1, int(copies)) if augment else 1
+        if copies > 1:
+            entries = entries * copies
+            logger.info(f"Duplikacja danych: {copies}x -> {len(entries)} sampli/epoke")
 
         self.entries = entries
         self.tokenizer = tokenizer

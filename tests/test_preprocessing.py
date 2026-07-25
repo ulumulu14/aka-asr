@@ -1,9 +1,34 @@
 """Deterministyczna matematyka front-endu: subsampling, CMVN, speed perturbation.
 Lapie 'przesunalem o ramke' / zle znormalizowalem cechy."""
+import json
+
 import numpy as np
 import torch
 
-from preprocessing import cmvn, speed_perturb_waveform, subsampled_length
+from preprocessing import (
+    ASRDataset,
+    CharTokenizer,
+    cmvn,
+    speed_perturb_waveform,
+    subsampled_length,
+)
+
+
+def _tiny_manifest(tmp_path, n=5):
+    m = tmp_path / "m.jsonl"
+    rows = [{"audio_path": f"/x/{i}.wav", "duration": 2.0, "text": "ala ma kota"} for i in range(n)]
+    m.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    return str(m)
+
+
+def test_copies_duplicates_only_with_augment(tmp_path):
+    m = _tiny_manifest(tmp_path, n=5)
+    tok = CharTokenizer()
+    assert len(ASRDataset(m, tok, augment=True, copies=1)) == 5
+    dup = ASRDataset(m, tok, augment=True, copies=3)
+    assert len(dup) == 15 and len(dup.durations) == 15  # 3x kroki/epoke
+    # val (augment=False) NIE dubluje -- kopie tylko dla treningu
+    assert len(ASRDataset(m, tok, augment=False, copies=3)) == 5
 
 
 def test_subsampled_length_divides_by_4_monotonic():
