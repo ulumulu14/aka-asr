@@ -13,6 +13,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import logging
+import math
 import random
 import time
 from dataclasses import asdict, dataclass
@@ -73,6 +74,8 @@ class TrainConfig:
 
     # Scheduler
     warmup_steps: int = 10_000
+    lr_schedule: str = "noam"  # 'noam' | 'cosine'
+    min_lr_ratio: float = 0.1  # floor cosine = min_lr_ratio * peak_lr (tylko cosine)
 
     # Trening
     max_epochs: int = 50
@@ -218,6 +221,25 @@ def make_noam_scheduler(optimizer, warmup_steps: int) -> LambdaLR:
     def lr_lambda(step: int) -> float:
         s = max(1, step)
         return warmup**0.5 * min(s**-0.5, s * warmup**-1.5)
+
+    return LambdaLR(optimizer, lr_lambda)
+
+
+# Scheduler cosine: liniowy warmup do peak_lr, potem cosinusowy zjazd do
+# floora (min_lr_ratio * peak_lr) w total_steps. W przeciwienstwie do Noama
+# LR nie zdycha na dlugich runach -- pozne epoki wciaz sie ucza.
+def make_cosine_scheduler(
+    optimizer, warmup_steps: int, total_steps: int, min_lr_ratio: float = 0.1
+) -> LambdaLR:
+    warmup = max(1, warmup_steps)
+    total = max(warmup + 1, total_steps)
+
+    def lr_lambda(step: int) -> float:
+        if step < warmup:
+            return (step + 1) / warmup  # liniowo 0->1
+        progress = min(1.0, (step - warmup) / (total - warmup))
+        cosine = 0.5 * (1.0 + math.cos(math.pi * progress))  # 1->0
+        return min_lr_ratio + (1.0 - min_lr_ratio) * cosine
 
     return LambdaLR(optimizer, lr_lambda)
 
@@ -432,7 +454,20 @@ def train(
         betas=cfg.betas,
         eps=cfg.eps,
     )
-    scheduler = make_noam_scheduler(optimizer, cfg.warmup_steps)
+    if cfg.lr_schedule == "cosine":
+        # kroki schedulera = kroki optymalizatora (co accum_grad batchy)
+        steps_per_epoch = max(1, len(train_loader) // cfg.accum_grad)
+        total_steps = steps_per_epoch * cfg.max_epochs
+        scheduler = make_cosine_scheduler(
+            optimizer, cfg.warmup_steps, total_steps, cfg.min_lr_ratio
+        )
+        logger.info(
+            f"Scheduler: cosine (warmup {cfg.warmup_steps}, total {total_steps} krokow, "
+            f"floor {cfg.min_lr_ratio}*peak)"
+        )
+    else:
+        scheduler = make_noam_scheduler(optimizer, cfg.warmup_steps)
+        logger.info(f"Scheduler: noam (warmup {cfg.warmup_steps})")
 
     # --- AMP ---
     amp_dtype = _DTYPES[cfg.amp_dtype]
@@ -774,6 +809,8 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         peak_lr=float(tr.get("lr", 1e-3)),
         weight_decay=float(tr.get("weight_decay", 1e-6)),
         warmup_steps=int(tr.get("warmup_steps", 10_000)),
+        lr_schedule=str(tr.get("lr_schedule", "noam")),
+        min_lr_ratio=float(tr.get("min_lr_ratio", 0.1)),
         max_epochs=int(tr.get("epochs", 50)),
         grad_clip=float(tr.get("grad_clip", 1.0)),
         accum_grad=int(tr.get("accum_grad", 1)),
