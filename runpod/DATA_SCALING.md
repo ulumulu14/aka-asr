@@ -35,8 +35,8 @@ cd /workspace/aka-asr/data
 RESP=$(curl -s -X POST \
   "https://mozilladatacollective.com/api/datasets/cmqinmu2a00winq07gyrtri0q/download" \
   -H "Authorization: Bearer <TWOJ_API_KEY>" -H "Content-Type: application/json")
-# wyciagnij downloadUrl (jq ALBO python, jesli brak jq):
-URL=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin)['downloadUrl'])")
+# wyciagnij downloadUrl (jq; fallback bez jq: python3 -c "import sys,json;print(json.load(sys.stdin)['downloadUrl'])"):
+URL=$(echo "$RESP" | jq -r '.downloadUrl')
 curl -o cv-26-pl.tar.gz "$URL"                      # ~kilka GB
 
 # 2. NAJPIERW sprawdz strukture tara (nowe "scripted-speech" moze roznic sie od
