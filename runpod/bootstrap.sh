@@ -21,7 +21,7 @@ set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-/workspace/aka-asr}"
 DATA_DIR="$REPO_DIR/data"
-YODAS_SHARDS="${YODAS_SHARDS:-10}"
+YODAS_SHARDS="${YODAS_SHARDS:-20}"   # pl000 ma 78 shardow; wiecej = wiecej (brudnego) YT
 MLS_URL="${MLS_URL:-https://dl.fbaipublicfiles.com/mls/mls_polish.tar.gz}"
 RIRS_URL="${RIRS_URL:-https://www.openslr.org/resources/28/rirs_noises.zip}"
 
@@ -46,9 +46,12 @@ fi
 # --- 2. Zrodla z HF (bigos / voxpopuli / yodas) -----------------------------
 HF2JSON="python utils/datasets_conversion/hf2json.py --out-root $DATA_DIR --manifest-dir $DATA_DIR"
 
-if [ ! -f "$DATA_DIR/train_manifest_yodas.jsonl" ]; then
-  log "YODAS ($YODAS_SHARDS shardow)"; $HF2JSON yodas --shards "$YODAS_SHARDS"
-else log "YODAS -- manifest istnieje, pomijam"; fi
+# Re-run gdy mamy mniej shardow niz zadano (hf2json pomija juz pobrane, dociaga
+# brakujace i przebudowuje manifest) -- pozwala zwiekszyc YODAS_SHARDS bez czyszczenia.
+YODAS_HAVE=$(ls -d "$DATA_DIR"/yodas_pl/[0-9]* 2>/dev/null | wc -l)
+if [ ! -f "$DATA_DIR/train_manifest_yodas.jsonl" ] || [ "$YODAS_HAVE" -lt "$YODAS_SHARDS" ]; then
+  log "YODAS ($YODAS_SHARDS shardow; mam $YODAS_HAVE)"; $HF2JSON yodas --shards "$YODAS_SHARDS"
+else log "YODAS -- $YODAS_HAVE shardow >= $YODAS_SHARDS, pomijam"; fi
 
 if [ ! -f "$DATA_DIR/train_manifest_voxpopuli.jsonl" ]; then
   log "VoxPopuli"; $HF2JSON voxpopuli
