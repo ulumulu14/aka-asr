@@ -11,14 +11,14 @@ loss RNN-T (torchaudio) z pomocniczym CTC na encoderze. Augmentacja wave'a
 (szum + RIR z OpenSLR 28 + speed perturbation, rolowane NIEZALEŻNIE per sample,
 więc wszystkie kombinacje możliwe) plus opcjonalna duplikacja `copies` - patrz
 sekcja `augment` w configach. Po dekodowaniu opcjonalny postprocessing
-(autofixer + ITN, sekcja niżej).
+(fixer + ITN, sekcja niżej).
 
 ## Instalacja
 
 ```bash
 pip install -r requirements.txt          # zawiera sentencepiece (tokenizer BPE)
-# tylko dla postprocessingu (autofixer, plT5) - NIE potrzebne do treningu ASR:
-pip install -r requirements-autofixer.txt
+# tylko dla postprocessingu (fixer, plT5) - NIE potrzebne do treningu ASR:
+pip install -r requirements-fixer.txt
 ```
 
 ## Przygotowanie danych
@@ -122,17 +122,17 @@ Opcje treningu istotne przy większych runach (wszystkie w configu):
   (`--min-score -99`), potem wyrzuć sample z WER(hyp, napis) > progu.
   Szczegóły i komendy: `runpod/DATA_SCALING.md`.
 
-## Postprocessing (autofixer + ITN)
+## Postprocessing (fixer + ITN)
 
 Po dekodowaniu tekst może przejść przez wspólny pipeline (`postprocessing.PostProcessor`,
 ta sama kolejność w demo i w ewaluacji): **AutoFixer** (fine-tune plT5 - korekcja błędów
 ASR + truecasing, np. "warszawa"→"Warszawa", + interpunkcja) → **ITN** (`itn.py` -
 liczby słowami → cyfry; tylko warstwa wyświetlania, nie stosować przy liczeniu WER,
 bo referencje są w formie mówionej). Przepływ:
-`autofixer/harvest.py` (pary {hipoteza, referencja z casingiem} z checkpointu ASR) →
-`autofixer/train_fixer.py` (fine-tune) → `autofixer/evaluate.py` (3 osie: WER akustyczny /
+`fixer/harvest.py` (pary {hipoteza, referencja z casingiem} z checkpointu ASR) →
+`fixer/train_fixer.py` (fine-tune) → `fixer/evaluate.py` (3 osie: WER akustyczny /
 interpunkcja F1 / casing recall). W demo włączane przez env: `ASR_DEMO_FIXER=<katalog
-modelu>`, `ASR_DEMO_ITN=1`. Szczegóły: `autofixer/README.md`.
+modelu>`, `ASR_DEMO_ITN=1`. Szczegóły: `fixer/README.md`.
 
 Demo mikrofonowe (Rust + PyO3, nagranie → checkpoint → tekst): `aka_asr_demo_app/`.
 

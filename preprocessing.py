@@ -486,7 +486,7 @@ class ASRDataset(Dataset):
             if len(tokenizer.encode(text)) == 0:
                 n_empty += 1
                 continue
-            e["text_raw"] = raw_text  # oryginal z casingiem/interpunkcja (dla autofixera)
+            e["text_raw"] = raw_text  # oryginal z casingiem/interpunkcja (dla fixera)
             e["text"] = text
             entries.append(e)
 

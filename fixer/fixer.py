@@ -3,12 +3,12 @@
 AutoFixer -- wspolny etap post-korekcji tekstu ASR (fine-tune plT5).
 
 Uzywany W OBU sciezkach pipeline'u:
-  - testowanie: autofixer/evaluate.py (WER ASR-samego vs ASR+fixer),
+  - testowanie: fixer/evaluate.py (WER ASR-samego vs ASR+fixer),
   - inferencja: asr_demo_app/transcriber.py (korekta transkrypcji na zywo).
 Ta sama klasa i te same wagi w obu miejscach -> WER z testu odpowiada temu, co
 realnie dostaje uzytkownik.
 
-transformers/torch importowane leniwie w __init__, zeby samo `import autofixer`
+transformers/torch importowane leniwie w __init__, zeby samo `import fixer`
 nie wymagalo ciezkich zaleznosci (wazne np. dla srodowiska treningu ASR).
 """
 

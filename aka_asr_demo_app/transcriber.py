@@ -123,7 +123,7 @@ _postproc = None  # PostProcessor budowany raz (laduje fixer), potem cache
 
 
 def _postprocess(text: str) -> str:
-    """Autofixer (korekcja + casing + interpunkcja) -> ITN. Konfig z ASR_DEMO_* env.
+    """Fixer (korekcja + casing + interpunkcja) -> ITN. Konfig z ASR_DEMO_* env.
     Ta sama kolejnosc etapow co w ewaluacji (postprocessing.PostProcessor)."""
     global _postproc
     if _postproc is None:
@@ -180,6 +180,6 @@ def transcribe(samples: np.ndarray, sample_rate: int, checkpoint_path: str) -> s
         f"{len(hyp_ids[0])} tokenow, {feats.shape[0]} ramek",
         flush=True,
     )
-    # Postprocessing: autofixer (korekcja + casing + interpunkcja) -> ITN.
+    # Postprocessing: fixer (korekcja + casing + interpunkcja) -> ITN.
     # Wlaczane przez ASR_DEMO_FIXER / ASR_DEMO_ITN (patrz postprocessing.py).
     return _postprocess(text)

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Test end-to-end autofixera: WER ASR-samego vs WER ASR+fixer na parach {hyp, ref}.
+Test end-to-end fixera: WER ASR-samego vs WER ASR+fixer na parach {hyp, ref}.
 
 Uzywa TEJ SAMEJ klasy AutoFixer co inferencja (asr_demo_app/transcriber.py) -> WER
 z testu odpowiada temu, co dostaje uzytkownik. Pary bierz z OSOBNEGO manifestu
 testowego (harvest.py), NIE z tych, na ktorych trenowano fixer (inaczej przeciek).
 
-    python -m autofixer.evaluate --pairs autofixer/pairs_test.jsonl \
-        --fixer checkpoints/autofixer/plt5-base_v1 [--device cuda] [--beams 1] \
-        [--guard-max-len-ratio 1.5] [--dump autofixer/changes.jsonl]
+    python -m fixer.evaluate --pairs fixer/pairs_test.jsonl \
+        --fixer checkpoints/fixer/plt5-base_v1 [--device cuda] [--beams 1] \
+        [--guard-max-len-ratio 1.5] [--dump fixer/changes.jsonl]
 """
 
 import argparse
@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from autofixer.fixer import AutoFixer  # noqa: E402
+from fixer.fixer import AutoFixer  # noqa: E402
 from preprocessing import normalize_text  # noqa: E402
 from train import compute_wer  # noqa: E402
 
@@ -72,7 +72,7 @@ def read_pairs(path: Path):
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Ewaluacja autofixera (WER raw vs fixed)")
+    ap = argparse.ArgumentParser(description="Ewaluacja fixera (WER raw vs fixed)")
     ap.add_argument("--pairs", required=True, type=Path)
     ap.add_argument("--fixer", required=True, type=Path)
     ap.add_argument("--device", default=None)
@@ -154,7 +154,7 @@ def main() -> None:
         )
     print(
         "\nWniosek: jesli fixer mocno podnosi interpunkcje-F1 i casing, osobny "
-        "re-punctuator/truecaser NIE jest potrzebny (autofixer to lapie)."
+        "re-punctuator/truecaser NIE jest potrzebny (fixer to lapie)."
     )
 
 

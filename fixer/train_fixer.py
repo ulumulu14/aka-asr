@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Fine-tune plT5 jako autofixer ASR na parach {hyp -> ref} (z autofixer/harvest.py).
+Fine-tune plT5 jako fixer ASR na parach {hyp -> ref} (z fixer/harvest.py).
 
 Wejscie modelu = prefiks + hipoteza ASR, cel = poprawna transkrypcja. Zapisuje
 model (save_pretrained) + fixer_meta.json (prefix, max_len) -> laduje go AutoFixer
 w tescie i w inferencji (ta sama korekta w obu sciezkach).
 
-    python -m autofixer.train_fixer \
-        --pairs autofixer/pairs_train.jsonl [autofixer/pairs_train_aug.jsonl ...] \
-        --val-pairs autofixer/pairs_val.jsonl \
-        --base allegro/plt5-base --out checkpoints/autofixer/plt5-base_v1 \
+    python -m fixer.train_fixer \
+        --pairs fixer/pairs_train.jsonl [fixer/pairs_train_aug.jsonl ...] \
+        --val-pairs fixer/pairs_val.jsonl \
+        --base allegro/plt5-base --out checkpoints/fixer/plt5-base_v1 \
         --epochs 3 --batch-size 16
 
-Zaleznosci: pip install -r requirements-autofixer.txt
+Zaleznosci: pip install -r requirements-fixer.txt
 """
 
 import argparse
@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch  # noqa: E402
 from torch.utils.data import DataLoader, Dataset  # noqa: E402
 
-from autofixer.fixer import DEFAULT_PREFIX  # noqa: E402
+from fixer.fixer import DEFAULT_PREFIX  # noqa: E402
 
 
 def read_pairs(paths, identity_keep: float = 1.0, seed: int = 42):
@@ -63,7 +63,7 @@ class PairDS(Dataset):
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Trening autofixera (plT5 fine-tune)")
+    ap = argparse.ArgumentParser(description="Trening fixera (plT5 fine-tune)")
     ap.add_argument("--pairs", nargs="+", required=True, type=Path)
     ap.add_argument("--val-pairs", nargs="*", type=Path, default=[])
     ap.add_argument("--base", default="allegro/plt5-base")
