@@ -3,18 +3,22 @@
 Polski ASR Conformer-Transducer (RNN-T), trenowany od zera na połączonych polskojęzycznych
 korpusach: Mozilla Common Voice PL, Multilingual LibriSpeech (MLS) Polish, BIGOS v2
 (Clarin studio/mobile, M-AILABS, FLEURS, korpusy PWR), VoxPopuli PL (Parlament EU)
-oraz YODAS PL, łącznie ~440 h audio.
+oraz YODAS PL - ~440 h audio w miksie bazowym, do ~780 h po rozszerzonym zaciągu
+(CV `validated`, YODAS 40 shardów; plan i komendy w `runpod/DATA_SCALING.md`).
 
 Architektura: Conformer encoder + causal-Conformer predictor + joint network,
-loss RNN-T (torchaudio) z pomocniczym CTC na encoderze. Opcjonalna augmentacja
-wave'a (szum + RIR, OpenSLR 28) - patrz sekcja `augment` w configach.
+loss RNN-T (torchaudio) z pomocniczym CTC na encoderze. Augmentacja wave'a
+(szum + RIR z OpenSLR 28 + speed perturbation, rolowane NIEZALEŻNIE per sample,
+więc wszystkie kombinacje możliwe) plus opcjonalna duplikacja `copies` - patrz
+sekcja `augment` w configach. Po dekodowaniu opcjonalny postprocessing
+(autofixer + ITN, sekcja niżej).
 
 ## Instalacja
 
 ```bash
-pip install -r requirements.txt
-# opcjonalnie, dla tokenizera BPE:
-pip install sentencepiece
+pip install -r requirements.txt          # zawiera sentencepiece (tokenizer BPE)
+# tylko dla postprocessingu (autofixer, plT5) - NIE potrzebne do treningu ASR:
+pip install -r requirements-autofixer.txt
 ```
 
 ## Przygotowanie danych
@@ -41,7 +45,7 @@ python utils/datasets_conversion/librispeech2json.py /path/to/mls_polish --split
 ```bash
 python utils/datasets_conversion/hf2json.py bigos       # gated: wymaga HF_TOKEN + akceptacji warunków datasetu
 python utils/datasets_conversion/hf2json.py voxpopuli
-python utils/datasets_conversion/hf2json.py yodas --shards 10   # --shards ogranicza wolumen (~0.9 GB/shard)
+python utils/datasets_conversion/hf2json.py yodas --shards 40   # pl000 ma 78 shardów (~1.1 GB / ~9.5 h każdy)
 ```
 
 Manifesty lądują w `data/` jako `{train,val}_manifest_<źródło>.jsonl`.
@@ -88,6 +92,17 @@ Checkpointy (`best.pt`, `epoch_NNNN.pt`, rolling `last.pt` co `save_every_steps`
 zawierają wagi, stan optymalizatora/schedulera oraz architekturę, tokenizer i config audio -
 model da się odtworzyć z samego `.pt`.
 
+Opcje treningu istotne przy większych runach (wszystkie w configu):
+
+- `augment.copies: N` - duplikacja danych: każdy sample N× na epokę, KAŻDA kopia
+  z niezależnie losowaną kombinacją augmentacji; łączny budżet widoków = `copies × epochs`.
+- `model.blank_bias_init: -4.0` - ujemny bias blanku w jointcie (tylko świeży run);
+  przy BPE zapobiega blank-collapse (puste hipotezy, val_WER~100% od epoki 0).
+- `training.lr_schedule: cosine` + `min_lr_ratio: 0.1` - warmup → cosinusowy zjazd
+  do floora; na długich runach LR nie zdycha jak przy Noamie (domyślnie: `noam`).
+- `training.collapse_abort_epochs: N` - guard: przerwij trening (z zapisem `last.pt`),
+  gdy po N epokach val_WER wciąż ~100% - oszczędza godziny GPU na nieudanym starcie.
+
 ## Augmentacja (oprócz noise i RIR), tricki treningowe i narzędzia
 
 - **Speed perturbation** (Kaldi 0.9/1.0/1.1×): `augment.speed_perturb: [0.9, 1.0, 1.1]`
@@ -101,12 +116,25 @@ model da się odtworzyć z samego `.pt`.
   ```bash
   python utils/evaluate_wer.py --checkpoint <ckpt> --manifest data/val_manifest_all.jsonl --beam-size 4
   ```
-- **Pseudo-labeling** (self-training na nieopisanym audio, np. dalsze shardy YODAS):
-  ```bash
-  python utils/pseudo_label.py --checkpoint <ckpt> --manifest <nieopisane.jsonl> --out data/pseudo.jsonl
-  ```
+- **Pseudo-labeling / agreement-cleaning** (`utils/pseudo_label.py`): na naprawdę
+  nieopisanym audio - pseudo-etykiety z filtrem pewności (`--min-score`); na audio
+  z napisami (np. YODAS, napisy manualne) - tryb czyszczenia: dekoduj wszystko
+  (`--min-score -99`), potem wyrzuć sample z WER(hyp, napis) > progu.
+  Szczegóły i komendy: `runpod/DATA_SCALING.md`.
 - **ITN** - liczby słowami → cyfry, tylko warstwa wyświetlania (`itn.py`);
   w demo apce włącza ją `ASR_DEMO_ITN=1`.
+
+## Postprocessing (autofixer + ITN)
+
+Po dekodowaniu tekst może przejść przez wspólny pipeline (`postprocessing.PostProcessor`,
+ta sama kolejność w demo i w ewaluacji): **AutoFixer** (fine-tune plT5 - korekcja błędów
+ASR + truecasing, np. "warszawa"→"Warszawa", + interpunkcja) → **ITN**. Przepływ:
+`autofixer/harvest.py` (pary {hipoteza, referencja z casingiem} z checkpointu ASR) →
+`autofixer/train_fixer.py` (fine-tune) → `autofixer/evaluate.py` (3 osie: WER akustyczny /
+interpunkcja F1 / casing recall). W demo włączane przez env: `ASR_DEMO_FIXER=<katalog
+modelu>`, `ASR_DEMO_ITN=1`. Szczegóły: `autofixer/README.md`.
+
+Demo mikrofonowe (Rust + PyO3, nagranie → checkpoint → tekst): `aka_asr_demo_app/`.
 
 ## Testy
 
