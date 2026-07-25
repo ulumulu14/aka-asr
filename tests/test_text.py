@@ -1,5 +1,6 @@
 """normalize_text + filtr cyfr + ITN. Bug w normalizacji = cicha korupcja
 danych treningowych (patrz saga z '_' w VoxPopuli)."""
+
 from itn import itn_pl
 from preprocessing import _DIGIT_RE, normalize_text
 

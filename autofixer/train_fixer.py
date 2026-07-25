@@ -14,6 +14,7 @@ w tescie i w inferencji (ta sama korekta w obu sciezkach).
 
 Zaleznosci: pip install -r requirements-autofixer.txt
 """
+
 import argparse
 import json
 import random
@@ -73,8 +74,12 @@ def main() -> None:
     ap.add_argument("--warmup", type=int, default=500)
     ap.add_argument("--max-len", type=int, default=128)
     ap.add_argument("--prefix", default=DEFAULT_PREFIX)
-    ap.add_argument("--identity-keep", type=float, default=1.0,
-                    help="Frakcja par hyp==ref do zachowania (1.0=wszystkie)")
+    ap.add_argument(
+        "--identity-keep",
+        type=float,
+        default=1.0,
+        help="Frakcja par hyp==ref do zachowania (1.0=wszystkie)",
+    )
     ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = ap.parse_args()
@@ -93,8 +98,13 @@ def main() -> None:
         src = [b[0] for b in batch]
         tgt = [b[1] for b in batch]
         enc = tok(src, max_length=args.max_len, truncation=True, padding=True, return_tensors="pt")
-        lab = tok(text_target=tgt, max_length=args.max_len, truncation=True, padding=True,
-                  return_tensors="pt")
+        lab = tok(
+            text_target=tgt,
+            max_length=args.max_len,
+            truncation=True,
+            padding=True,
+            return_tensors="pt",
+        )
         labels = lab.input_ids
         labels[labels == tok.pad_token_id] = -100  # ignoruj padding w stracie
         enc["labels"] = labels
@@ -102,17 +112,25 @@ def main() -> None:
 
     train_pairs = read_pairs(args.pairs, identity_keep=args.identity_keep)
     n_err = sum(h != r for h, r in train_pairs)
-    print(f"[INFO] par treningowych: {len(train_pairs)} ({n_err} z bledem, "
-          f"{len(train_pairs) - n_err} identycznych)")
+    print(
+        f"[INFO] par treningowych: {len(train_pairs)} ({n_err} z bledem, "
+        f"{len(train_pairs) - n_err} identycznych)"
+    )
     train_loader = DataLoader(
-        PairDS(train_pairs, args.prefix), batch_size=args.batch_size, shuffle=True,
-        collate_fn=collate, num_workers=args.num_workers,
+        PairDS(train_pairs, args.prefix),
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=collate,
+        num_workers=args.num_workers,
     )
     val_loader = None
     if args.val_pairs:
         val_loader = DataLoader(
-            PairDS(read_pairs(args.val_pairs), args.prefix), batch_size=args.batch_size,
-            shuffle=False, collate_fn=collate, num_workers=args.num_workers,
+            PairDS(read_pairs(args.val_pairs), args.prefix),
+            batch_size=args.batch_size,
+            shuffle=False,
+            collate_fn=collate,
+            num_workers=args.num_workers,
         )
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
@@ -137,8 +155,11 @@ def main() -> None:
             n += 1
             step += 1
             if step % 50 == 0:
-                print(f"  epoka {epoch} krok {step} loss={running / n:.4f} "
-                      f"lr={sched.get_last_lr()[0]:.2e} {n / (time.time() - t0):.1f} it/s", flush=True)
+                print(
+                    f"  epoka {epoch} krok {step} loss={running / n:.4f} "
+                    f"lr={sched.get_last_lr()[0]:.2e} {n / (time.time() - t0):.1f} it/s",
+                    flush=True,
+                )
 
         if val_loader:
             model.eval()
@@ -146,7 +167,9 @@ def main() -> None:
             with torch.no_grad():
                 for batch in val_loader:
                     batch = {k: v.to(device) for k, v in batch.items()}
-                    with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp):
+                    with torch.autocast(
+                        device_type=device.type, dtype=torch.bfloat16, enabled=use_amp
+                    ):
                         vl += model(**batch).loss.item()
                     vn += 1
             print(f"[epoka {epoch}] val_loss={vl / max(1, vn):.4f}")
@@ -156,8 +179,11 @@ def main() -> None:
     model.save_pretrained(args.out)
     tok.save_pretrained(args.out)
     (args.out / "fixer_meta.json").write_text(
-        json.dumps({"base": args.base, "prefix": args.prefix, "max_len": args.max_len},
-                   ensure_ascii=False, indent=2),
+        json.dumps(
+            {"base": args.base, "prefix": args.prefix, "max_len": args.max_len},
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     print(f"[OK] zapisano fixer -> {args.out}")

@@ -1,5 +1,6 @@
 """Round-trip checkpointu: metadane (model_cfg/tokenizer/audio_cfg) odtwarzaja
 model i wczytuja wagi. Na tym kontrakcie stoi demo apka, harvest i evaluate_wer."""
+
 from dataclasses import asdict
 
 import torch
@@ -16,9 +17,7 @@ def test_checkpoint_reconstruction(tmp_path):
     tok = CharTokenizer()
     audio = AudioConfig()
     model_cfg = dict(MODEL_SIZES["smol"])
-    model = ConformerTransducer(
-        vocab_size=tok.vocab_size, n_mels=audio.n_mels, **model_cfg
-    ).eval()
+    model = ConformerTransducer(vocab_size=tok.vocab_size, n_mels=audio.n_mels, **model_cfg).eval()
     opt = AdamW(model.parameters(), lr=1e-3)
     sched = LambdaLR(opt, lambda _s: 1.0)
     meta = {
@@ -28,8 +27,16 @@ def test_checkpoint_reconstruction(tmp_path):
     }
     ckpt = tmp_path / "ckpt.pt"
     save_ckpt(
-        ckpt, model=model, optimizer=opt, scheduler=sched, scaler=None,
-        step=1, epoch=0, best_wer=1.0, cfg=TrainConfig(), meta=meta,
+        ckpt,
+        model=model,
+        optimizer=opt,
+        scheduler=sched,
+        scaler=None,
+        step=1,
+        epoch=0,
+        best_wer=1.0,
+        cfg=TrainConfig(),
+        meta=meta,
     )
 
     # odtworzenie DOKLADNIE jak transcriber/harvest/evaluate_wer

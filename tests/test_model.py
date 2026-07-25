@@ -1,6 +1,7 @@
 """Smoke pipeline'u treningowego na syntetyku (CPU, bez audio/GPU): model buduje
 sie, forward/loss/backward dzialaja, greedy i beam produkuja tokeny w vocab.
 Lapie 'zepsulem forward/collate/loss' BEZ odpalania poda."""
+
 import torch
 
 from decoding import beam_search_decode_batch
@@ -13,7 +14,9 @@ VOCAB = 10  # bez blanka -> wyjscie jointa ma 11 klas (0=blank, 1..10=tokeny)
 
 def _model():
     torch.manual_seed(0)
-    return ConformerTransducer(vocab_size=VOCAB, n_mels=80, dropout=0.0, **dict(MODEL_SIZES["smol"]))
+    return ConformerTransducer(
+        vocab_size=VOCAB, n_mels=80, dropout=0.0, **dict(MODEL_SIZES["smol"])
+    )
 
 
 def test_forward_shape():

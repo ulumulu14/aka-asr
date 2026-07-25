@@ -119,22 +119,28 @@ def _features_from_waveform(
     return cmvn(extractor.features_from_waveform(wav_t))
 
 
-_fixer_cache: dict[str, object] = {}
+_postproc = None  # PostProcessor budowany raz (laduje fixer), potem cache
 
 
-def _apply_fixer(model_dir: str, text: str) -> str:
-    """Opcjonalna post-korekcja ASR (ASR_DEMO_FIXER). Ta sama klasa AutoFixer co w testach."""
-    fx = _fixer_cache.get(model_dir)
-    if fx is None:
-        from autofixer.fixer import AutoFixer
+def _postprocess(text: str) -> str:
+    """Autofixer (korekcja + casing + interpunkcja) -> ITN. Konfig z ASR_DEMO_* env.
+    Ta sama kolejnosc etapow co w ewaluacji (postprocessing.PostProcessor)."""
+    global _postproc
+    if _postproc is None:
+        from postprocessing import PostProcessor
 
-        fx = AutoFixer(model_dir, device=DEVICE)
-        _fixer_cache[model_dir] = fx
-        print(f"[python] autofixer zaladowany z {model_dir}", flush=True)
-    corrected = fx.correct(text)
-    if corrected != text:
-        print(f"[python] autofixer: {text!r} -> {corrected!r}", flush=True)
-    return corrected
+        _postproc = PostProcessor.from_env(device=DEVICE)
+        if _postproc.enabled:
+            print(
+                f"[python] postprocessing: fixer={_postproc.fixer is not None} itn={_postproc.itn}",
+                flush=True,
+            )
+    if not _postproc.enabled:
+        return text
+    out = _postproc.process(text)
+    if out != text:
+        print(f"[python] postproc: {text!r} -> {out!r}", flush=True)
+    return out
 
 
 def transcribe(samples: np.ndarray, sample_rate: int, checkpoint_path: str) -> str:
@@ -174,17 +180,6 @@ def transcribe(samples: np.ndarray, sample_rate: int, checkpoint_path: str) -> s
         f"{len(hyp_ids[0])} tokenow, {feats.shape[0]} ramek",
         flush=True,
     )
-    # Postprocessing (kolejnosc wazna): autofixer (korekcja bledow + casing +
-    # interpunkcja) NAJPIERW, potem ITN (liczby->cyfry na sformatowanym tekscie).
-    fixer_dir = os.environ.get("ASR_DEMO_FIXER")
-    if fixer_dir:
-        text = _apply_fixer(fixer_dir, text)
-    # ITN tylko do wyswietlania; ASR_DEMO_ITN=1 wlacza
-    if os.environ.get("ASR_DEMO_ITN", "") not in ("", "0"):
-        from itn import itn_pl
-
-        converted = itn_pl(text)
-        if converted != text:
-            print(f"[python] itn: {text!r} -> {converted!r}", flush=True)
-        text = converted
-    return text
+    # Postprocessing: autofixer (korekcja + casing + interpunkcja) -> ITN.
+    # Wlaczane przez ASR_DEMO_FIXER / ASR_DEMO_ITN (patrz postprocessing.py).
+    return _postprocess(text)

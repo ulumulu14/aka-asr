@@ -11,6 +11,7 @@ realnie dostaje uzytkownik.
 transformers/torch importowane leniwie w __init__, zeby samo `import autofixer`
 nie wymagalo ciezkich zaleznosci (wazne np. dla srodowiska treningu ASR).
 """
+
 from __future__ import annotations
 
 import json
