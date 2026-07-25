@@ -32,6 +32,11 @@ augment:
   speed_perturb: [0.9, 1.0, 1.1]  # perturbacja tempa (Kaldi); ~2/3 sampli omija
                                   # feature_cache (mel on-the-fly) -> wiekszy koszt
                                   # dataloadera; usun linie zeby wylaczyc
+  copies: 2                       # duplikacja danych (Kaldi-style): kazdy sample N razy
+                                  # na epoke, KAZDA kopia z niezalezna augmentacja
+                                  # (inny speed/szum/RIR/SpecAug). N x kroki/epoke ->
+                                  # N x czas epoki. 3 = pelna triplikacja pod 3 tempa.
+                                  # Dla stalego compute zmniejsz epochs proporcjonalnie.
 
 model:
   size: big
