@@ -1001,9 +1001,22 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     resume_state = None
     model_cfg = dict(MODEL_SIZES[model_size])
 
+    # Override wymiarow z configu (glownie dla model.size=custom, ale dziala dla
+    # kazdego rozmiaru): user definiuje architekture bez ruszania model.py.
+    dims_override = config.get("model", {}).get("dims") or {}
+    if dims_override:
+        unknown = set(dims_override) - set(model_cfg)
+        if unknown:
+            raise click.ClickException(
+                f"model.dims: nieznane pola {sorted(unknown)} "
+                f"(dozwolone: {sorted(model_cfg)})"
+            )
+        model_cfg.update(dims_override)
+        logger.info(f"model.dims override: {dims_override}")
+
     if resume_path:
         resume_state = torch.load(resume_path, map_location="cpu")
-        model_cfg = resume_state.get("model_cfg", model_cfg)
+        model_cfg = resume_state.get("model_cfg", model_cfg)  # architektura z checkpointu wygrywa
         logger.info(f"Wznawiam z {resume_path}")
 
     model = ConformerTransducer(

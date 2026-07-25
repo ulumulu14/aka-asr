@@ -12,6 +12,26 @@ from train import greedy_decode_batch
 VOCAB = 10  # bez blanka -> wyjscie jointa ma 11 klas (0=blank, 1..10=tokeny)
 
 
+def _n_params(size, override=None):
+    cfg = dict(MODEL_SIZES[size])
+    if override:
+        cfg.update(override)
+    m = ConformerTransducer(vocab_size=VOCAB, n_mels=80, dropout=0.0, **cfg)
+    return sum(p.numel() for p in m.parameters())
+
+
+def test_sizes_ordered_smol_mid_big_custom():
+    # kazdy kolejny rozmiar wiekszy; custom domyslnie > big
+    n = {s: _n_params(s) for s in ("smol", "mid", "big", "custom")}
+    assert n["smol"] < n["mid"] < n["big"] < n["custom"]
+
+
+def test_dims_override_scales_model():
+    base = _n_params("custom")
+    bigger = _n_params("custom", {"enc_dim": 1024, "enc_heads": 16, "joint_dim": 1024})
+    assert bigger > base  # override z configu realnie zmienia architekture
+
+
 def _model():
     torch.manual_seed(0)
     return ConformerTransducer(
