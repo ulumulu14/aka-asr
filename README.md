@@ -76,13 +76,24 @@ python train.py configs/config_local.yaml --model_size smol --device cpu
 
 # szybki debug:
 python train.py configs/config_local_debug.yaml
-
-# RunPod (dane na network volume w /workspace):
-python train.py configs/config_runpod.yaml
-
-# wznowienie po padzie maszyny:
-python train.py configs/config_runpod.yaml --resume /workspace/checkpoints/conformer_mid/<exp>/last.pt
 ```
+
+**RunPod** (dane i checkpointy na network volume w `/workspace`) - trening odpala
+`runpod/train.sh` przez `setsid+nohup` (przeżywa rozłączenie SSH) i startuje
+TensorBoard na porcie 6006. Config podajesz przez zmienną `CONFIG`:
+
+```bash
+cd /workspace/aka-asr
+CONFIG=configs/config_runpod_big_bpe.yaml bash runpod/train.sh
+tail -f /workspace/aka-asr/train_runpod.log
+
+# wznowienie po ubiciu poda (checkpointy na volume):
+RESUME=/workspace/aka-asr/checkpoints/conformer_big/<exp>/last.pt \
+  CONFIG=configs/config_runpod_big_bpe.yaml bash runpod/train.sh
+```
+
+Pełny runbook (pobranie danych, TensorBoard, skalowanie miksu): `runpod/README.md`
+i `runpod/DATA_SCALING.md`.
 
 Rozmiary modelu: `smol` (debug), `mid` (~30M parametrów, domyślny), `big` (`--model_size` albo `model.size` w configu).
 
@@ -102,6 +113,9 @@ Opcje treningu istotne przy większych runach (wszystkie w configu):
   do floora; na długich runach LR nie zdycha jak przy Noamie (domyślnie: `noam`).
 - `training.collapse_abort_epochs: N` - guard: przerwij trening (z zapisem `last.pt`),
   gdy po N epokach val_WER wciąż ~100% - oszczędza godziny GPU na nieudanym starcie.
+- `data.bad_list_path: <plik>` - denylist uszkodzonego audio (pliki dekodujące się
+  do 0 próbek itp.): wykluczane przy starcie, nowe napotkane w trakcie dopisywane
+  cicho (bez spamu w logu); trwa na volume między runami, manifest nietknięty.
 
 ## Augmentacja (oprócz noise i RIR), tricki treningowe i narzędzia
 

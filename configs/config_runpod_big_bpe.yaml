@@ -15,6 +15,9 @@ data:
   max_audio_len: 20.0
   min_audio_len: 0.5
   feature_cache_dir: /workspace/aka-asr/data/features_cache
+  bad_list_path: /workspace/aka-asr/data/bad_audio.txt  # denylist uszkodzonego audio:
+                                  # wykluczane przy starcie, nowe dopisywane w trakcie
+                                  # (cicho, bez spamu w logu). Trwa na volume miedzy runami.
 
 tokenizer:
   type: bpe
