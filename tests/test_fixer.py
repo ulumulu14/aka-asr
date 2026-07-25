@@ -1,7 +1,7 @@
-"""Metryki ewaluacji autofixera: WER akustyczny (korekcja), interpunkcja F1, casing
+"""Metryki ewaluacji fixera: WER akustyczny (korekcja), interpunkcja F1, casing
 recall. Czyste funkcje (bez transformers) -- rozdzielaja 3 osie jakosci."""
 
-from autofixer.evaluate import _acoustic, _cap_recall, _punct_f1
+from fixer.evaluate import _acoustic, _cap_recall, _punct_f1
 
 
 def test_acoustic_strips_case_and_punct():

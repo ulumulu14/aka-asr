@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Harvest par {bledna hipoteza ASR; poprawna transkrypcja} do treningu autofixera.
+Harvest par {bledna hipoteza ASR; poprawna transkrypcja} do treningu fixera.
 
 Uruchamia checkpoint ASR (z train.py) na manifescie, dekoduje greedy DOKLADNIE
 jak walidacja (train.greedy_decode_batch) i zapisuje JSONL: {"hyp": ..., "ref": ...}.
@@ -12,8 +12,8 @@ Wskazowki:
   - pary TESTOWE harvestuj z osobnego manifestu BEZ augmentacji (uczciwy WER),
     i NIE trenuj na nich fixera.
 
-    python -m autofixer.harvest --checkpoint checkpoints/conformer_big/<exp>/best.pt \
-        --manifest data/val_manifest_all.jsonl --out autofixer/pairs_val.jsonl \
+    python -m fixer.harvest --checkpoint checkpoints/conformer_big/<exp>/best.pt \
+        --manifest data/val_manifest_all.jsonl --out fixer/pairs_val.jsonl \
         --device cuda [--augment] [--max-batch-duration 200] [--limit 20000]
 """
 
@@ -59,7 +59,7 @@ def load_asr(checkpoint_path: Path, device: torch.device):
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Harvest par {hyp, ref} dla autofixera")
+    ap = argparse.ArgumentParser(description="Harvest par {hyp, ref} dla fixera")
     ap.add_argument("--checkpoint", required=True, type=Path)
     ap.add_argument("--manifest", required=True, type=Path)
     ap.add_argument("--out", required=True, type=Path)

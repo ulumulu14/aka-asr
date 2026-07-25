@@ -5,7 +5,7 @@ Postprocessing tekstu ASR -- jeden pipeline dla inferencji i ewaluacji end-to-en
 Etapy (kolejnosc wazna):
   1. AutoFixer (plT5): korekcja bledow ASR + przywrocenie CASINGU (wielkie litery,
      nazwy wlasne "HuggingFace") + interpunkcji. Jeden model seq2seq robi to razem
-     (patrz autofixer/).
+     (patrz fixer/).
   2. ITN (itn.py): liczby slowami -> cyfry, na juz sformatowanym tekscie.
 
 Trzymanie kolejnosci w JEDNYM miejscu (zamiast powielac hooki w transcriber /
@@ -32,7 +32,7 @@ class PostProcessor:
     ):
         self.fixer = None
         if fixer_dir:
-            from autofixer.fixer import AutoFixer  # lazy: transformers ciezkie
+            from fixer import AutoFixer  # lazy: transformers ciezkie
 
             self.fixer = AutoFixer(fixer_dir, device=device)
         self.itn = itn
