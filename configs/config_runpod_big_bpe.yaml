@@ -93,5 +93,8 @@ training:
   max_symbols_per_step: 3
   compile: false
   tensorboard: true
+  # hf_repo: <hf-user>/aka-asr-runs   # sync na HF Hub: metryki co epoke + best.pt async.
+                                      # Wymaga HF_TOKEN z prawem ZAPISU. Brak -> off.
+  hf_private: true
   ckpt_root: /workspace/aka-asr/checkpoints
   seed: 42

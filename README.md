@@ -116,6 +116,11 @@ Opcje treningu istotne przy większych runach (wszystkie w configu):
 - `data.bad_list_path: <plik>` - denylist uszkodzonego audio (pliki dekodujące się
   do 0 próbek itp.): wykluczane przy starcie, nowe napotkane w trakcie dopisywane
   cicho (bez spamu w logu); trwa na volume między runami, manifest nietknięty.
+- `training.hf_repo: <user>/<repo>` - sync eksperymentu na HuggingFace Hub: metryki
+  (TB + log) co epokę, `best.pt` async gdy się poprawia; run = podkatalog
+  `conformer_<size>/<timestamp>` w repo. Wymaga `HF_TOKEN` z prawem **zapisu**
+  (inny niż read-only do BIGOS); `hf_private: true` domyślnie. Błędy HF nie ubijają
+  treningu. Brak `hf_repo` -> sync wyłączony.
 
 ## Augmentacja (oprócz noise i RIR), tricki treningowe i narzędzia
 

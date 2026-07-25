@@ -41,6 +41,7 @@ from preprocessing import (
     WaveformAugment,
     make_collate_fn,
 )
+from utils.hf_sync import HfSync
 
 _DTYPES = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
 
@@ -54,6 +55,7 @@ def setup_logging(log_file: Path | None = None) -> None:
     console = logging.StreamHandler()
     console.setFormatter(fmt)
     logger.addHandler(console)
+
     if log_file is not None:
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setFormatter(fmt)
@@ -113,6 +115,10 @@ class TrainConfig:
     # Zdrowe runy big+BPE schodza ponizej 100% juz w epoce 0-1.
     collapse_abort_epochs: int = 0
 
+    # Sync eksperymentu na HuggingFace Hub (puste repo -> wylaczone)
+    hf_repo: str | None = None
+    hf_private: bool = True
+
     # Inne
     compile: bool = False
     seed: int = 42
@@ -151,6 +157,7 @@ class LengthBucketBatchSampler:
 
     def _make_batches(self, rng: random.Random) -> list[list[int]]:
         idx = sorted(range(len(self.durations)), key=lambda i: self.durations[i])
+
         if self.shuffle:
             for w0 in range(0, len(idx), self.window):
                 window = idx[w0 : w0 + self.window]
@@ -163,12 +170,15 @@ class LengthBucketBatchSampler:
         batches: list[list[int]] = []
         cur: list[int] = []
         cur_max = 0.0
+
         for i in idx:
             dur = max(self.durations[i], 0.1)
             padded_cost = max(cur_max, dur) * (len(cur) + 1)
+
             if cur and (padded_cost > self.max_batch_duration or len(cur) >= self.bs):
                 batches.append(cur)
                 cur, cur_max = [], 0.0
+
             cur.append(i)
             cur_max = max(cur_max, dur)
         if cur:
@@ -190,27 +200,35 @@ class LengthBucketBatchSampler:
 # WER
 def _edit_distance(ref: list, hyp: list) -> int:
     n, m = len(ref), len(hyp)
+
     if n == 0:
         return m
     if m == 0:
         return n
+
     prev = list(range(m + 1))
     cur = [0] * (m + 1)
+
     for i in range(1, n + 1):
         cur[0] = i
+
         for j in range(1, m + 1):
             cost = 0 if ref[i - 1] == hyp[j - 1] else 1
             cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+
         prev, cur = cur, prev
+
     return prev[m]
 
 
 def compute_wer(refs: list[str], hyps: list[str]) -> float:
     total_dist = total_words = 0
+
     for r, h in zip(refs, hyps):
         rw, hw = r.split(), h.split()
         total_dist += _edit_distance(rw, hw)
         total_words += len(rw)
+
     return total_dist / max(1, total_words)
 
 
@@ -237,8 +255,10 @@ def make_cosine_scheduler(
     def lr_lambda(step: int) -> float:
         if step < warmup:
             return (step + 1) / warmup  # liniowo 0->1
+
         progress = min(1.0, (step - warmup) / (total - warmup))
         cosine = 0.5 * (1.0 + math.cos(math.pi * progress))  # 1->0
+
         return min_lr_ratio + (1.0 - min_lr_ratio) * cosine
 
     return LambdaLR(optimizer, lr_lambda)
@@ -275,6 +295,7 @@ def greedy_decode_batch(
 
     all_hyps: list[list[int]] = []
     all_scores: list[float] = []
+
     for b in range(B):
         T_b = int(logit_lengths[b])
         f_b = f[b : b + 1, :T_b]  # (1, T_b, d)
@@ -297,18 +318,22 @@ def greedy_decode_batch(
                 if return_scores:
                     lp = F.log_softmax(logit.flatten().float(), dim=-1)
                     tok_logps.append(float(lp[pred]))
+
                 out_tokens.append(pred)
                 hyp = torch.cat(
                     [hyp, torch.tensor([[pred]], dtype=torch.long, device=device)],
                     dim=1,
                 )
                 g_last = model.predictor(hyp)[:, -1:, :]
+
         all_hyps.append(out_tokens)
+
         if return_scores:
             all_scores.append(sum(tok_logps) / len(tok_logps) if tok_logps else float("-inf"))
 
     if return_scores:
         return all_hyps, all_scores
+
     return all_hyps
 
 
@@ -406,12 +431,14 @@ def load_ckpt(
 ) -> dict:
     state = torch.load(path, map_location=map_location)
     model.load_state_dict(state["model"])
+
     if optimizer is not None and "optimizer" in state:
         optimizer.load_state_dict(state["optimizer"])
     if scheduler is not None and "scheduler" in state:
         scheduler.load_state_dict(state["scheduler"])
     if scaler is not None and state.get("scaler") is not None:
         scaler.load_state_dict(state["scaler"])
+
     return state
 
 
@@ -445,6 +472,7 @@ def train(
             no_decay.append(p)
         else:
             decay.append(p)
+
     optimizer = AdamW(
         [
             {"params": decay, "weight_decay": cfg.weight_decay},
@@ -478,14 +506,17 @@ def train(
     start_epoch = 0
     global_step = 0
     best_wer = float("inf")
+
     if resume_state is not None:
         model.load_state_dict(resume_state["model"])
+
         if "optimizer" in resume_state:
             optimizer.load_state_dict(resume_state["optimizer"])
         if "scheduler" in resume_state:
             scheduler.load_state_dict(resume_state["scheduler"])
         if resume_state.get("scaler") is not None:
             scaler.load_state_dict(resume_state["scaler"])
+
         global_step = resume_state.get("step", 0)
         best_wer = resume_state.get("best_wer", float("inf"))
         last_epoch = resume_state.get("epoch", -1)
@@ -498,6 +529,7 @@ def train(
         model = torch.compile(model)
 
     writer = None
+
     if cfg.tensorboard:
         try:
             from torch.utils.tensorboard import SummaryWriter
@@ -510,6 +542,12 @@ def train(
             )
 
     ckpt_dir = Path(cfg.ckpt_dir)
+    # Sync na HuggingFace Hub (opcjonalny): run = podkatalog conformer_<size>/<timestamp>
+    hf = HfSync(
+        cfg.hf_repo,
+        run_subdir="/".join(ckpt_dir.parts[-2:]),
+        private=cfg.hf_private,
+    )
     t0 = time.time()
     epoch = start_epoch
     n_oom_skipped = 0  # batche pominiete przez CUDA OOM (skrajnie dlugie/geste)
@@ -558,6 +596,7 @@ def train(
                     )
                     loss = loss_rnnt
                     loss_ctc = None
+
                     if cfg.ctc_weight > 0:
                         raw_model = getattr(model, "_orig_mod", model)
                         ctc_log_probs = F.log_softmax(
@@ -607,6 +646,7 @@ def train(
                     # i lecimy dalej. Inne RuntimeError przepuszczamy.
                     if "out of memory" not in str(e).lower():
                         raise
+
                     n_oom_skipped += 1
                     logger.warning(
                         f"[krok {global_step}] CUDA OOM na batchu "
@@ -679,8 +719,10 @@ def train(
                 epoch_bar.set_postfix(
                     val_loss=f"{metrics['loss']:.3f}", val_wer=f"{metrics['wer']:.2%}"
                 )
+
                 for ref, hyp in metrics["examples"]:
                     logger.info(f"REF: {ref} | HYP: {hyp}")
+
                 if writer is not None:
                     writer.add_scalar("val/loss", metrics["loss"], global_step)
                     writer.add_scalar("val/wer", metrics["wer"], global_step)
@@ -701,6 +743,7 @@ def train(
                         meta=meta,
                     )
                     logger.info(f"Nowy najlepszy WER={best_wer:.2%} -- zapisano best.pt")
+                    hf.push_best(ckpt_dir / "best.pt")  # async, ~1,5 GB w tle
 
                 # Anty blank-collapse: po N epokach wciaz ~100% WER = RNN-T utknal
                 # w "emituj tylko blank" i nie wyjdzie. Zdrowy run schodzi ponizej
@@ -730,6 +773,10 @@ def train(
                 )
                 _cleanup_old_ckpts(ckpt_dir, cfg.keep_last)
 
+                if writer is not None:
+                    writer.flush()  # tfevents na dysk zanim push
+                hf.push_metrics(ckpt_dir / "tb", ckpt_dir / "train.log")  # lekkie, async
+
         logger.info(
             f"Koniec treningu, najlepszy WER={best_wer:.2%} "
             f"(batchy pominietych przez OOM: {n_oom_skipped})"
@@ -757,8 +804,13 @@ def train(
         raise
     finally:
         epoch_bar.close()
+
         if writer is not None:
             writer.close()
+
+        # ostatni push (log/tb koncowe) + domkniecie pending uploadow best.pt
+        hf.push_metrics(ckpt_dir / "tb", ckpt_dir / "train.log")
+        hf.finalize()
 
 
 def load_config(config_path: str) -> dict:
@@ -829,6 +881,8 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         save_every_steps=int(tr.get("save_every_steps", 1000)),
         max_symbols_per_step=int(tr.get("max_symbols_per_step", 3)),
         collapse_abort_epochs=int(tr.get("collapse_abort_epochs", 0)),
+        hf_repo=tr.get("hf_repo") or None,
+        hf_private=bool(tr.get("hf_private", True)),
         compile=bool(tr.get("compile", False)),
         seed=int(tr.get("seed", 42)),
     )
@@ -870,6 +924,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     aug_cfg = config.get("augment") or {}
     wave_aug = None
     wave_aug_prob = float(aug_cfg.get("prob", 0.4))
+
     if aug_cfg.get("noise_dir") or aug_cfg.get("rir_dir"):
         wave_aug = WaveformAugment(
             noise_dir=aug_cfg.get("noise_dir"),
@@ -886,6 +941,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         )
 
     speed_factors = aug_cfg.get("speed_perturb")
+
     if speed_factors:
         logger.info(f"Speed perturbation: {speed_factors}")
 
@@ -937,12 +993,14 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     if cfg.num_workers > 0:
         dl_kwargs["persistent_workers"] = True
         dl_kwargs["prefetch_factor"] = 4
+
     train_loader = DataLoader(train_ds, batch_sampler=train_sampler, **dl_kwargs)
     val_loader = DataLoader(val_ds, batch_sampler=val_sampler, **dl_kwargs)
 
     # Model (przy resume architektura z checkpointa)
     resume_state = None
     model_cfg = dict(MODEL_SIZES[model_size])
+
     if resume_path:
         resume_state = torch.load(resume_path, map_location="cpu")
         model_cfg = resume_state.get("model_cfg", model_cfg)
@@ -961,6 +1019,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     # daje wysoki stosunek blank:token, przez co "emituj blank" jest silnym
     # atraktorem (pusty greedy, val_WER~100% od ep0). 0.0 = bez zmiany.
     blank_bias = float(config.get("model", {}).get("blank_bias_init", 0.0))
+
     if resume_state is None and blank_bias != 0.0:
         with torch.no_grad():
             model.joint.out.bias[0] = blank_bias  # indeks 0 = blank
