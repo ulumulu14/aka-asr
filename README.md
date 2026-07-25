@@ -128,11 +128,13 @@ Po dekodowaniu tekst może przejść przez wspólny pipeline (`postprocessing.Po
 ta sama kolejność w demo i w ewaluacji): **AutoFixer** (fine-tune plT5 - korekcja błędów
 ASR + truecasing, np. "warszawa"→"Warszawa", + interpunkcja) → **ITN** (`itn.py` -
 liczby słowami → cyfry; tylko warstwa wyświetlania, nie stosować przy liczeniu WER,
-bo referencje są w formie mówionej). Przepływ:
+bo referencje są w formie mówionej) → **RuleFixer** (`fixer/rules.py` - ręczne poprawki
+regex jako ostatnie sito, dla uporczywych błędów których model nie łapie; plik reguł
+JSON, wzór w `fixer/rules.example.json`). Przepływ trenowania fixera:
 `fixer/harvest.py` (pary {hipoteza, referencja z casingiem} z checkpointu ASR) →
 `fixer/train_fixer.py` (fine-tune) → `fixer/evaluate.py` (3 osie: WER akustyczny /
 interpunkcja F1 / casing recall). W demo włączane przez env: `ASR_DEMO_FIXER=<katalog
-modelu>`, `ASR_DEMO_ITN=1`. Szczegóły: `fixer/README.md`.
+modelu>`, `ASR_DEMO_ITN=1`, `ASR_DEMO_RULES=<plik reguł>`. Szczegóły: `fixer/README.md`.
 
 Demo mikrofonowe (Rust + PyO3, nagranie → checkpoint → tekst): `aka_asr_demo_app/`.
 

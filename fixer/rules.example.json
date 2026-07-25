@@ -1,0 +1,14 @@
+[
+  {
+    "comment": "uporczywa nazwa wlasna, ktorej ASR/AutoFixer nie sklada poprawnie",
+    "pattern": "hugging\\s*face",
+    "replacement": "HuggingFace",
+    "flags": "i"
+  },
+  {
+    "comment": "backreference: zachowaj koncowke fleksyjna",
+    "pattern": "\\bpaj(torch\\w*)\\b",
+    "replacement": "Py\\1",
+    "flags": "i"
+  }
+]

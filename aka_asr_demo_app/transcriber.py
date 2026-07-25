@@ -123,8 +123,8 @@ _postproc = None  # PostProcessor budowany raz (laduje fixer), potem cache
 
 
 def _postprocess(text: str) -> str:
-    """Fixer (korekcja + casing + interpunkcja) -> ITN. Konfig z ASR_DEMO_* env.
-    Ta sama kolejnosc etapow co w ewaluacji (postprocessing.PostProcessor)."""
+    """Fixer (korekcja + casing + interpunkcja) -> ITN -> reczne regexy. Konfig z
+    ASR_DEMO_* env. Ta sama kolejnosc etapow co w ewaluacji (postprocessing.PostProcessor)."""
     global _postproc
     if _postproc is None:
         from postprocessing import PostProcessor
@@ -132,7 +132,8 @@ def _postprocess(text: str) -> str:
         _postproc = PostProcessor.from_env(device=DEVICE)
         if _postproc.enabled:
             print(
-                f"[python] postprocessing: fixer={_postproc.fixer is not None} itn={_postproc.itn}",
+                f"[python] postprocessing: fixer={_postproc.fixer is not None} "
+                f"itn={_postproc.itn} rules={_postproc.rules is not None}",
                 flush=True,
             )
     if not _postproc.enabled:
