@@ -301,29 +301,27 @@ class WaveformAugment:
         scale = torch.sqrt(p_sig / (p_noise * 10 ** (snr / 10)))
         return wav + scale * noise_t
 
-    def __call__(self, wav: torch.Tensor) -> torch.Tensor:
-        """Waveform mono (1, T) -> zaugmentowany waveform (1, T)."""
+    def apply(self, wav: torch.Tensor, do_rir: bool, do_noise: bool) -> torch.Tensor:
+        """Aplikuje WSKAZANE augmentacje (o decyzji przesadza wolajacy) -- wszystkie
+        kombinacje rir/noise mozliwe, lacznie z zadna (wtedy zwraca wejscie)."""
         self.rng = _lazy_worker_rng(self.rng)
-        rng = self.rng
-
-        applied = False
-        if self.rir_files and rng.random() < self.rir_prob:
-            wav = self._apply_rir(wav, rng)
-            applied = True
-        if self.noise_files and rng.random() < self.noise_prob:
-            wav = self._mix_noise(wav, rng)
-            applied = True
-        if not applied:
-            # koszt ekstrakcji on-the-fly juz poniesiony -- niech cos wejdzie
-            if self.noise_files:
-                wav = self._mix_noise(wav, rng)
-            else:
-                wav = self._apply_rir(wav, rng)
-
+        if do_rir and self.rir_files:
+            wav = self._apply_rir(wav, self.rng)
+        if do_noise and self.noise_files:
+            wav = self._mix_noise(wav, self.rng)
         peak = wav.abs().max()
         if peak > 1.0:  # ochrona przed clippingiem po zmiksowaniu
             wav = wav / peak
         return wav
+
+    def __call__(self, wav: torch.Tensor) -> torch.Tensor:
+        """Niezalezne rolowanie rir i noise (bez wymuszania -- 'zadna' tez mozliwa)."""
+        self.rng = _lazy_worker_rng(self.rng)
+        return self.apply(
+            wav,
+            do_rir=bool(self.rir_files) and self.rng.random() < self.rir_prob,
+            do_noise=bool(self.noise_files) and self.rng.random() < self.noise_prob,
+        )
 
 
 def speed_perturb_waveform(wav: torch.Tensor, sample_rate: int, factor: float) -> torch.Tensor:
@@ -527,18 +525,21 @@ class ASRDataset(Dataset):
         return len(self.entries)
 
     def _compute_features(self, entry: dict) -> np.ndarray:
-        # Speed perturbation i augmentacja waveformu wymuszaja ekstrakcje
-        # on-the-fly (cache trzyma czyste cechy) -- cache tylko bez obu
+        # NIEZALEZNE rolowanie speed / rir / noise -- kazde osobno wg wlasnego
+        # prawdopodobienstwa, wiec wszystkie kombinacje moga wypasc (lacznie z
+        # zadna -> czyste cechy + SpecAugment pozniej). Kazda augmentacja waveformu
+        # wymusza ekstrakcje on-the-fly (cache trzyma tylko czyste cechy).
         factor = 1.0
         if self.speed_factors is not None:
             factor = float(np.random.choice(self.speed_factors))
-        do_wave_aug = self.wave_aug is not None and np.random.random() < self.wave_aug_prob
-        if factor != 1.0 or do_wave_aug:
+        do_rir = self.wave_aug is not None and np.random.random() < self.wave_aug.rir_prob
+        do_noise = self.wave_aug is not None and np.random.random() < self.wave_aug.noise_prob
+        if factor != 1.0 or do_rir or do_noise:
             wav = self.extractor.load_waveform(entry["audio_path"])
             if factor != 1.0:
                 wav = speed_perturb_waveform(wav, self.cfg.sample_rate, factor)
-            if do_wave_aug:
-                wav = self.wave_aug(wav)
+            if do_rir or do_noise:
+                wav = self.wave_aug.apply(wav, do_rir=do_rir, do_noise=do_noise)
             return self.extractor.features_from_waveform(wav)
         if self.cache_dir is not None:
             cache_path = self.cache_dir / feature_cache_name(entry["audio_path"])

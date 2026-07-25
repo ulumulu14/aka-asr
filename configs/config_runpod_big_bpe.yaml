@@ -25,18 +25,17 @@ tokenizer:
 augment:
   noise_dir: /workspace/aka-asr/data/RIRS_NOISES/pointsource_noises
   rir_dir: /workspace/aka-asr/data/RIRS_NOISES/simulated_rirs
-  prob: 0.4
-  noise_prob: 0.9
+  # rir/noise/speed rolowane NIEZALEZNIE per sample -> wszystkie kombinacje moga
+  # wypasc (w tym zadna = czyste + SpecAug). noise_prob/rir_prob to teraz osobne
+  # prawdopodobienstwa (nie ma juz wspolnej bramki 'prob'). 0.5/0.5 = zbalansowane
+  # kombinacje; podnies noise_prob dla wiekszej odpornosci na szum.
+  noise_prob: 0.5
   rir_prob: 0.5
   snr_db: [5, 25]
-  speed_perturb: [0.9, 1.0, 1.1]  # perturbacja tempa (Kaldi); ~2/3 sampli omija
-                                  # feature_cache (mel on-the-fly) -> wiekszy koszt
-                                  # dataloadera; usun linie zeby wylaczyc
-  copies: 2                       # duplikacja danych (Kaldi-style): kazdy sample N razy
-                                  # na epoke, KAZDA kopia z niezalezna augmentacja
-                                  # (inny speed/szum/RIR/SpecAug). N x kroki/epoke ->
-                                  # N x czas epoki. 3 = pelna triplikacja pod 3 tempa.
-                                  # Dla stalego compute zmniejsz epochs proporcjonalnie.
+  speed_perturb: [0.9, 1.0, 1.1]  # perturbacja tempa (Kaldi); 1.0 = bez zmiany (~2/3 sampli)
+  copies: 6                       # duplikacja danych: kazdy sample 6x na epoke, KAZDA
+                                  # kopia z niezaleznie losowana kombinacja augmentacji.
+                                  # UWAGA: 6x kroki/epoke = 6x czas epoki (patrz epochs).
 
 model:
   size: big
@@ -48,7 +47,11 @@ model:
                                   # to celuje w drugi problem (blank-dominacje)
 
 training:
-  epochs: 30
+  epochs: 100                    # UWAGA: przy copies=6 kazda epoka = 6x sampli, wiec
+                                 # 100 epok = ~2,1 mln krokow ~ 4-5 dni H100. best.pt
+                                 # zapisywany na biezaco -> monitoruj i przerwij, gdy
+                                 # WER splaszczy (Noam i tak scina LR do znikomego
+                                 # w okolicach ~40-50 "grubej" epoki). Bez copies wroc do ~30.
   batch_size: 128
   max_batch_duration: 450.0      # jak w wariancie char: BPE-512 NIE zwieksza VRAM
                                  # jointa. Dominuje tensor (B,T',U,640); U spada
@@ -71,10 +74,9 @@ training:
   ctc_weight: 0.3                 # z powrotem 0.3 -- aux CTC nigdy nie byl problemem
                                   # (stabilny 5.6), podbicie do 0.5 nic nie dalo
   ctc_label_smoothing: 0.05      # wygladzanie tylko aux CTC (RNN-T bez zmian)
-  collapse_abort_epochs: 4       # abort jesli po 4 epokach best_WER wciaz >=99%
-                                  # (bylo 2 -- za ostro: ubilo run z 99.92%, ktory
-                                  # dawal oznaki zycia; zdrowy z blank-biasem
-                                  # schodzi mocno ponizej juz w ep0-2)
+  collapse_abort_epochs: 2       # przy copies=6 epoka jest 6x "grubsza" (6x krokow),
+                                  # wiec collapse widac juz po 1-2 epokach -> prog 2
+                                  # (przy copies=1 dawac 4)
   log_every: 50
   eval_every_epochs: 1
   save_every_steps: 1000
