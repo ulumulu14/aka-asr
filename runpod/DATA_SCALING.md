@@ -74,23 +74,27 @@ common_voice_25_0, gated) jak bigos/voxpopuli -- wtedy zero URL-i i tarow.
 
 ---
 
-## 3. Pseudo-labeling (faza 3 -- PO dobrym modelu)
+## 3. Pseudo-labeling / czyszczenie agreement
 
-Whisper-owa dźwignia: dekoduj NIEOPISANE audio najlepszym modelem, filtruj po
-pewności, dorzuć do miksu. Rób z modelu docelowego (retry BPE albo mid 12,71%),
-nie ze słabego -- inaczej wstrzykujesz błędy.
+**Fakt (sprawdzone na HF)**: `pl000` to JEDYNY polski subset YODAS (78 shardów,
+napisy MANUALNE); `pl100` (auto) nie istnieje. Wniosek: klasyczny pseudo-labeling
+na dalszych shardach yodas NIE ma sensu -- napisy sa lepsze niz nasz model,
+nadpisywanie ich pseudo-etykietami to degradacja. Docelowe zrodla pseudo to
+naprawde nieopisane audio (podcasty, Sejm) -- osobny zaciag.
+
+**Co ma sens JUZ TERAZ: agreement-cleaning napisow YODAS** -- dekodujemy audio
+najlepszym checkpointem (pseudo_label.py z wylaczonymi filtrami zbiera hyp per
+sample) i wyrzucamy sample, gdzie WER(hyp, napis) > progu (zle zsynchronizowany /
+smieciowy napis). Etykiety zostaja z napisow, model tylko filtruje:
 
 ```bash
-# audio bez etykiet, np. dalsze shardy YODAS (dekodujemy AUDIO, ignorujac napisy)
-# albo polskie podcasty/YT sciagniete osobno -> manifest {audio_path, duration}
-python utils/pseudo_label.py \
-    --checkpoint checkpoints/conformer_big/<exp>/avg_last5.pt \
-    --manifest data/unlabeled_pl.jsonl --out data/pseudo_pl.jsonl \
-    --min-score -0.4 --max-tokens-per-sec 25
-
-# scal z miksem i przetrenuj (pseudo osobno, zeby latwo wylaczyc/przewazyc)
-cat data/train_manifest_all.jsonl data/pseudo_pl.jsonl > data/train_manifest_all_ps.jsonl
+python utils/pseudo_label.py --checkpoint <best_lub_avg.pt> \
+    --manifest data/train_manifest_yodas.jsonl --out data/yodas_hyps.jsonl \
+    --min-score -99 --min-chars 0 --max-batch-duration 400 --num-workers 12
+# potem join hyp<->napis po audio_path, drop przy WER > ~0.8 (snippet: patrz plan
+# w pamieci sesji); typowo wypada kilka-kilkanascie %. UWAGA: ponowny bootstrap
+# z wiekszym YODAS_SHARDS przebuduje manifest z napisow -> filtr powtorzyc.
 ```
-`--min-score` (średni log-prob tokenów): -0.3 ostry ... -0.7 luźny. Iteruj:
-lepszy model -> lepsze pseudo-etykiety -> lepszy model. Ewaluuj, czy pseudo realnie
-zbija WER (osobny manifest = łatwy A/B), nie dokładaj na ślepo.
+
+Dla przyszlych naprawde nieopisanych zrodel: `--min-score -0.4` (ostry) ...
+`-0.7` (luzny), `--max-tokens-per-sec 25`, pseudo w OSOBNYM manifescie (latwy A/B).
