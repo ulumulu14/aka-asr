@@ -33,9 +33,11 @@ augment:
   rir_prob: 0.5
   snr_db: [5, 25]
   speed_perturb: [0.9, 1.0, 1.1]  # perturbacja tempa (Kaldi); 1.0 = bez zmiany (~2/3 sampli)
-  copies: 4                       # duplikacja danych: kazdy sample 4x na epoke, KAZDA
+  copies: 2                       # duplikacja danych: kazdy sample 2x na epoke, KAZDA
                                   # kopia z niezaleznie losowana kombinacja augmentacji.
-                                  # UWAGA: 4x kroki/epoke = 4x czas epoki (patrz epochs).
+                                  # Lacznie widokow/sample = copies x epochs (2x100=200);
+                                  # przy wiekszym miksie (YODAS20+CV valid) wiecej realnej
+                                  # roznorodnosci -> 2 wystarcza. 2x kroki/epoke = 2x czas.
 
 model:
   size: big
@@ -47,11 +49,10 @@ model:
                                   # to celuje w drugi problem (blank-dominacje)
 
 training:
-  epochs: 100                    # UWAGA: przy copies=4 kazda epoka = 4x sampli, wiec
-                                 # 100 epok = ~1,4 mln krokow ~ 3 dni H100. best.pt
-                                 # zapisywany na biezaco -> monitoruj i przerwij, gdy
-                                 # WER splaszczy. cosine trzyma LR do konca (floor 0.1),
-                                 # wiec pozne epoki wciaz ucza. Bez copies wroc do ~30.
+  epochs: 100                    # przy copies=2 na miksie ~600h: ~9k krokow/epoke,
+                                 # ~33 min/epoka -> ~2,3 dnia H100 (na 438h: ~1,8 dnia).
+                                 # best.pt na biezaco -> przy plateau mozna uciac
+                                 # wczesniej; cosine trzyma LR do konca (floor 0.1).
   batch_size: 128
   max_batch_duration: 450.0      # jak w wariancie char: BPE-512 NIE zwieksza VRAM
                                  # jointa. Dominuje tensor (B,T',U,640); U spada
