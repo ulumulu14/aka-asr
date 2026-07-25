@@ -463,20 +463,37 @@ class ASRDataset(Dataset):
         speed_perturb_factors: list[float] | tuple[float, ...] | None = None,
         copies: int = 1,
         return_index: bool = False,
+        bad_list_path: str | Path | None = None,
     ):
         self.return_index = return_index  # getitem dokłada 'index' (harvest: mapowanie na text_raw)
+        # Denylist uszkodzonego audio (pliki dekodujace sie do 0 probek itp.).
+        # Wykluczane przy starcie; nowe wadliwe dopisywane w getitem (patrz _mark_bad).
+        # Osobny plik (NIE mutacja manifestu -- manifest regenerowalny bootstrapem).
+        self.bad_list_path = Path(bad_list_path).expanduser() if bad_list_path else None
+        self._session_bad: set[str] = set()  # dopisane w tym procesie (bez duplikatow)
+        bad_set: set[str] = set()
+        if self.bad_list_path and self.bad_list_path.exists():
+            bad_set = {
+                ln.strip()
+                for ln in self.bad_list_path.read_text(encoding="utf-8").splitlines()
+                if ln.strip()
+            }
+
         manifest_path = Path(manifest_path).expanduser()
         with open(manifest_path, encoding="utf-8") as f:
             raw_entries = [json.loads(line) for line in f if line.strip()]
 
         entries = []
-        n_duration = n_digits = n_empty = 0
+        n_duration = n_digits = n_empty = n_bad = 0
         for e in raw_entries:
             d = e.get("duration", 0.0)
             if (min_duration is not None and d < min_duration) or (
                 max_duration is not None and d > max_duration
             ):
                 n_duration += 1
+                continue
+            if e["audio_path"] in bad_set:  # znane uszkodzone -> pomijamy od razu
+                n_bad += 1
                 continue
             raw_text = e["text"]
             text = normalize_text(raw_text)
@@ -494,7 +511,7 @@ class ASRDataset(Dataset):
         logger.info(
             f"{manifest_path.name}: {len(entries)}/{len(raw_entries)} sampli "
             f"(odrzucone: {n_duration} dlugosc, {n_digits} cyfry w tekscie, "
-            f"{n_empty} pusta transkrypcja)"
+            f"{n_empty} pusta transkrypcja, {n_bad} denylist)"
         )
 
         # Duplikacja danych (Kaldi-style): kazdy sample wystepuje `copies` razy
@@ -525,6 +542,19 @@ class ASRDataset(Dataset):
 
     def __len__(self) -> int:
         return len(self.entries)
+
+    def _mark_bad(self, audio_path: str) -> None:
+        """Dopisz uszkodzony plik do denylist (best-effort). Append pojedynczej
+        linii jest atomowy z wielu workerow (< PIPE_BUF); set sesji zapobiega
+        duplikatom z tego procesu. Denylist wyklucza plik przy nastepnym starcie."""
+        if self.bad_list_path is None or audio_path in self._session_bad:
+            return
+        self._session_bad.add(audio_path)
+        try:
+            with open(self.bad_list_path, "a", encoding="utf-8") as f:
+                f.write(audio_path + "\n")
+        except OSError:
+            pass  # denylist to udogodnienie, nie moze ubic treningu
 
     def _compute_features(self, entry: dict) -> np.ndarray:
         # NIEZALEZNE rolowanie speed / rir / noise -- kazde osobno wg wlasnego
@@ -558,8 +588,9 @@ class ASRDataset(Dataset):
             entry = self.entries[(idx + offset) % n]
             try:
                 feats = self._compute_features(entry)
-            except Exception as e:
-                #logger.warning(f"Pomijam wadliwy sample {entry['audio_path']}: {e}")
+            except Exception:
+                # cicho (bez spamu w logu); dopisz do denylist -> wyklucz przy restarcie
+                self._mark_bad(entry["audio_path"])
                 continue
 
             feats = cmvn(feats)
