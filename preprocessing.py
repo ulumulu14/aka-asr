@@ -559,7 +559,7 @@ class ASRDataset(Dataset):
             try:
                 feats = self._compute_features(entry)
             except Exception as e:
-                logger.warning(f"Pomijam wadliwy sample {entry['audio_path']}: {e}")
+                #logger.warning(f"Pomijam wadliwy sample {entry['audio_path']}: {e}")
                 continue
 
             feats = cmvn(feats)
