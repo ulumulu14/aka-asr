@@ -9,3 +9,5 @@ torchinfo
 tensorboard
 # tokenizer BPE (configs/*_bpe.yaml):
 sentencepiece
+# sync eksperymentu na HF Hub (training.hf_repo) + pobieranie danych (utils/datasets_conversion):
+huggingface_hub
