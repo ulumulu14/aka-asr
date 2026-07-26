@@ -106,7 +106,7 @@ model:
   dims: {enc_dim: 1024, enc_heads: 16, enc_layers: 24, joint_dim: 1024, pred_dim: 1024}
 ```
 
-`model.dims` działa dla każdego rozmiaru (nadpisuje wybraną bazę); nieznane pole →
+`model.dims` działa dla każdego rozmiaru (nadpisuje wybraną bazę); nieznane pole ->
 błąd na starcie. Przy `--resume` architektura pochodzi z checkpointu (override ignorowany).
 
 Metryki: `tensorboard --logdir <ckpt_dir>/tb`. Log tekstowy: `<ckpt_dir>/train.log`.
@@ -121,7 +121,7 @@ Opcje treningu istotne przy większych runach (wszystkie w configu):
   z niezależnie losowaną kombinacją augmentacji; łączny budżet widoków = `copies × epochs`.
 - `model.blank_bias_init: -4.0` - ujemny bias blanku w jointcie (tylko świeży run);
   przy BPE zapobiega blank-collapse (puste hipotezy, val_WER~100% od epoki 0).
-- `training.lr_schedule: cosine` + `min_lr_ratio: 0.1` - warmup → cosinusowy zjazd
+- `training.lr_schedule: cosine` + `min_lr_ratio: 0.1` - warmup -> cosinusowy zjazd
   do floora; na długich runach LR nie zdycha jak przy Noamie (domyślnie: `noam`).
 - `training.collapse_abort_epochs: N` - guard: przerwij trening (z zapisem `last.pt`),
   gdy po N epokach val_WER wciąż ~100% - oszczędza godziny GPU na nieudanym starcie.
@@ -157,17 +157,17 @@ Opcje treningu istotne przy większych runach (wszystkie w configu):
 
 Po dekodowaniu tekst może przejść przez wspólny pipeline (`postprocessing.PostProcessor`,
 ta sama kolejność w demo i w ewaluacji): **AutoFixer** (fine-tune plT5 - korekcja błędów
-ASR + truecasing, np. "skarżysko - kamienna"→"Skarżysko-Kamienna", + interpunkcja) → **ITN** (`itn.py` -
-liczby słowami → cyfry; tylko warstwa wyświetlania, nie stosować przy liczeniu WER,
-bo referencje są w formie mówionej) → **RuleFixer** (`fixer/rules.py` - ręczne poprawki
+ASR + truecasing, np. "skarżysko - kamienna"->"Skarżysko-Kamienna", + interpunkcja) -> **ITN** (`itn.py` -
+liczby słowami -> cyfry; tylko warstwa wyświetlania, nie stosować przy liczeniu WER,
+bo referencje są w formie mówionej) -> **RuleFixer** (`fixer/rules.py` - ręczne poprawki
 regex jako ostatnie sito, dla uporczywych błędów których model nie łapie; plik reguł
 JSON, wzór w `fixer/rules.example.json`). Przepływ trenowania fixera:
-`fixer/harvest.py` (pary {hipoteza, referencja z casingiem} z checkpointu ASR) →
-`fixer/train_fixer.py` (fine-tune) → `fixer/evaluate.py` (3 osie: WER akustyczny /
+`fixer/harvest.py` (pary {hipoteza, referencja z casingiem} z checkpointu ASR) ->
+`fixer/train_fixer.py` (fine-tune) -> `fixer/evaluate.py` (3 osie: WER akustyczny /
 interpunkcja F1 / casing recall). W demo włączane przez env: `ASR_DEMO_FIXER=<katalog
 modelu>`, `ASR_DEMO_ITN=1`, `ASR_DEMO_RULES=<plik reguł>`. Szczegóły: `fixer/README.md`.
 
-Demo mikrofonowe (Rust + PyO3, nagranie → checkpoint → tekst): `aka_asr_demo_app/`.
+Demo mikrofonowe (Rust + PyO3, nagranie -> checkpoint -> tekst): `aka_asr_demo_app/`.
 
 ## Testy
 
