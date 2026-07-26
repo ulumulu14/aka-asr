@@ -153,7 +153,7 @@ Opcje treningu istotne przy większych runach (wszystkie w configu):
   (`--min-score -99`), potem wyrzuć sample z WER(hyp, napis) > progu.
   Szczegóły i komendy: `runpod/DATA_SCALING.md`.
 
-## Postprocessing (fixer + ITN)
+## Postprocessing (fixer + ITN)`
 
 Po dekodowaniu tekst może przejść przez wspólny pipeline (`postprocessing.PostProcessor`,
 ta sama kolejność w demo i w ewaluacji): **AutoFixer** (fine-tune plT5 - korekcja błędów
@@ -171,8 +171,8 @@ Demo mikrofonowe (Rust + PyO3, nagranie -> checkpoint -> tekst): `aka_asr_demo_a
 
 ## Testy
 
-Wąski suite na deterministyczny rdzeń (metryki, tokenizery, normalizacja tekstu,
-front-end audio, smoke pipeline'u treningowego, round-trip checkpointu) — łapie
+Wąski suite na deterministyczny rdzeń (metryki, tokenizery, normalizacja t0ekstu,
+front-end audio, smoke pipeline'u treningowego, round-trip checkpointu) - łapie
 ciche bugi kosztujące godziny GPU. Nie testuje zbieżności/WER treningu ani środowiska.
 
 ```bash
