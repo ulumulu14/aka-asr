@@ -82,9 +82,11 @@ training:
   ctc_weight: 0.3                 # z powrotem 0.3 -- aux CTC nigdy nie byl problemem
                                   # (stabilny 5.6), podbicie do 0.5 nic nie dalo
   ctc_label_smoothing: 0.05      # wygladzanie tylko aux CTC (RNN-T bez zmian)
-  collapse_abort_epochs: 2       # przy copies=4 epoka jest 4x "grubsza" (4x krokow),
-                                  # wiec collapse widac juz po 1-2 epokach -> prog 2
-                                  # (przy copies=1 dawac 4)
+  collapse_abort_epochs: 5       # guard anty blank-collapse zluzowany (bylo 2): w
+                                  # udanym runie 17,10% przelom przyszedl dopiero w
+                                  # epoce 3 (66% WER) -- za ostry prog ubilby zdrowy,
+                                  # wolno startujacy run. 5 daje margines po przelomie;
+                                  # koszt nieudanego startu ~2,75h zamiast ~1,1h.
   log_every: 50
   eval_every_epochs: 1
   save_every_steps: 1000
