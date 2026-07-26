@@ -105,12 +105,15 @@ class LogMelExtractor:
 
         if sample_rate != self.cfg.sample_rate:
             resampler = self._resamplers.get(sample_rate)
+
             if resampler is None:
                 resampler = transforms.Resample(
                     orig_freq=sample_rate, new_freq=self.cfg.sample_rate
                 )
                 self._resamplers[sample_rate] = resampler
+
             waveform = resampler(waveform)
+
         return waveform
 
     def features_from_waveform(self, waveform: torch.Tensor) -> np.ndarray:
@@ -133,6 +136,7 @@ class LogMelExtractor:
 
         mel = self.mel(waveform)  # (1, n_mels, T)
         log_mel = torch.log(mel.squeeze(0) + self.cfg.log_eps)
+
         return log_mel.T.numpy().astype(np.float32)  # (T, n_mels)
 
     def __call__(self, wav_path: str | Path) -> np.ndarray:
@@ -196,17 +200,22 @@ class SpecAugment:
         # Freq masking
         for _ in range(self.mF):
             f = int(self.rng.integers(0, self.F + 1))
+
             if f == 0 or M - f <= 0:
                 continue
+
             f0 = int(self.rng.integers(0, M - f))
             out[:, f0 : f0 + f] = 0.0
 
         # Time masking z adaptacyjnym cap'em
         cap = self.T if self.p is None else min(self.T, int(self.p * T))
+
         for _ in range(self.mT):
             t = int(self.rng.integers(0, max(1, cap + 1)))
+
             if t == 0 or T - t <= 0:
                 continue
+
             t0 = int(self.rng.integers(0, T - t))
             out[t0 : t0 + t, :] = 0.0
 
@@ -239,14 +248,17 @@ class WaveformAugment:
     ):
         if sf is None:
             raise ImportError("WaveformAugment wymaga soundfile: pip install soundfile")
+
         self.sample_rate = sample_rate
         self.noise_prob = noise_prob
         self.rir_prob = rir_prob
         self.snr_db = snr_db
         self.noise_files = self._scan(noise_dir)
         self.rir_files = self._scan(rir_dir)
+
         if not self.noise_files and not self.rir_files:
             raise ValueError("WaveformAugment: brak plikow szumu i RIR (podaj noise_dir/rir_dir)")
+
         self.rng: np.random.Generator | None = None  # leniwie per worker
 
     @classmethod
@@ -255,19 +267,23 @@ class WaveformAugment:
             return []
         root = Path(root).expanduser()
         files = sorted(p for p in root.rglob("*") if p.suffix.lower() in cls.AUDIO_EXTS)
+
         if not files:
             raise ValueError(f"WaveformAugment: brak plikow audio w {root}")
+
         return files
 
     def _load(self, path: Path) -> np.ndarray:
         """Mono float32 @ self.sample_rate."""
         data, sr = sf.read(str(path), dtype="float32", always_2d=True)
         wav = data.mean(axis=1)
+
         if sr != self.sample_rate:
             wav_t = torchaudio.functional.resample(
                 torch.from_numpy(wav).unsqueeze(0), sr, self.sample_rate
             )
             wav = wav_t.squeeze(0).numpy()
+
         return wav
 
     def _apply_rir(self, wav: torch.Tensor, rng: np.random.Generator) -> torch.Tensor:
@@ -281,37 +297,48 @@ class WaveformAugment:
         # RIR-y maja rozne wzmocnienia -> przywroc energie oryginalu
         rms_in = wav.pow(2).mean().sqrt()
         rms_out = out.pow(2).mean().sqrt()
+
         if rms_out > 1e-8:
             out = out * (rms_in / rms_out)
+
         return out
 
     def _mix_noise(self, wav: torch.Tensor, rng: np.random.Generator) -> torch.Tensor:
         noise = self._load(self.noise_files[int(rng.integers(len(self.noise_files)))])
         T = wav.shape[1]
+
         if len(noise) < T:
             noise = np.tile(noise, T // len(noise) + 1)
+
         start = int(rng.integers(0, len(noise) - T + 1))
         noise_t = torch.from_numpy(noise[start : start + T]).unsqueeze(0)
-
         p_sig = wav.pow(2).mean()
         p_noise = noise_t.pow(2).mean()
+
         if p_noise < 1e-10 or p_sig < 1e-10:
             return wav
+
         snr = float(rng.uniform(*self.snr_db))
         scale = torch.sqrt(p_sig / (p_noise * 10 ** (snr / 10)))
+
         return wav + scale * noise_t
 
     def apply(self, wav: torch.Tensor, do_rir: bool, do_noise: bool) -> torch.Tensor:
         """Aplikuje WSKAZANE augmentacje (o decyzji przesadza wolajacy) -- wszystkie
         kombinacje rir/noise mozliwe, lacznie z zadna (wtedy zwraca wejscie)."""
         self.rng = _lazy_worker_rng(self.rng)
+
         if do_rir and self.rir_files:
             wav = self._apply_rir(wav, self.rng)
+
         if do_noise and self.noise_files:
             wav = self._mix_noise(wav, self.rng)
+
         peak = wav.abs().max()
+
         if peak > 1.0:  # ochrona przed clippingiem po zmiksowaniu
             wav = wav / peak
+
         return wav
 
     def __call__(self, wav: torch.Tensor) -> torch.Tensor:
@@ -464,6 +491,7 @@ class ASRDataset(Dataset):
         copies: int = 1,
         return_index: bool = False,
         bad_list_path: str | Path | None = None,
+        max_token_frame_ratio: float = 1.0,
     ):
         self.return_index = return_index  # getitem dokłada 'index' (harvest: mapowanie na text_raw)
         # Denylist uszkodzonego audio (pliki dekodujace sie do 0 probek itp.).
@@ -472,6 +500,7 @@ class ASRDataset(Dataset):
         self.bad_list_path = Path(bad_list_path).expanduser() if bad_list_path else None
         self._session_bad: set[str] = set()  # dopisane w tym procesie (bez duplikatow)
         bad_set: set[str] = set()
+
         if self.bad_list_path and self.bad_list_path.exists():
             bad_set = {
                 ln.strip()
@@ -480,29 +509,49 @@ class ASRDataset(Dataset):
             }
 
         manifest_path = Path(manifest_path).expanduser()
+
         with open(manifest_path, encoding="utf-8") as f:
             raw_entries = [json.loads(line) for line in f if line.strip()]
 
         entries = []
-        n_duration = n_digits = n_empty = n_bad = 0
+        n_duration = n_digits = n_empty = n_bad = n_ratio = 0
+        # ile ramek melspec przypada na sekunde (do filtra U vs T')
+        frames_per_sec = audio_cfg.sample_rate / audio_cfg.hop_length
+
         for e in raw_entries:
             d = e.get("duration", 0.0)
+
             if (min_duration is not None and d < min_duration) or (
                 max_duration is not None and d > max_duration
             ):
                 n_duration += 1
                 continue
+
             if e["audio_path"] in bad_set:  # znane uszkodzone -> pomijamy od razu
                 n_bad += 1
                 continue
+
             raw_text = e["text"]
             text = normalize_text(raw_text)
+
             if _DIGIT_RE.search(text):
                 n_digits += 1
                 continue
-            if len(tokenizer.encode(text)) == 0:
+
+            n_tokens = len(tokenizer.encode(text))
+            if n_tokens == 0:
                 n_empty += 1
                 continue
+
+            # Filtr U > T': RNN-T wymaga T' (ramki po subsamplingu) >= U (tokeny) do
+            # alignmentu. Krotkie audio + dlugi tekst (np. krotkie klipy CV z pelnym
+            # zdaniem + interpunkcja) -> loss_rnnt eksploduje -> grad explosion ->
+            # blank-collapse. T' z duracji manifestu (przyblizenie).
+            t_sub = subsampled_length(int(d * frames_per_sec))
+            if n_tokens > t_sub * max_token_frame_ratio:
+                n_ratio += 1
+                continue
+
             e["text_raw"] = raw_text  # oryginal z casingiem/interpunkcja (dla fixera)
             e["text"] = text
             entries.append(e)
@@ -511,7 +560,7 @@ class ASRDataset(Dataset):
         logger.info(
             f"{manifest_path.name}: {len(entries)}/{len(raw_entries)} sampli "
             f"(odrzucone: {n_duration} dlugosc, {n_digits} cyfry w tekscie, "
-            f"{n_empty} pusta transkrypcja, {n_bad} denylist)"
+            f"{n_empty} pusta transkrypcja, {n_bad} denylist, {n_ratio} U>T' (tekst>audio))"
         )
 
         # Duplikacja danych (Kaldi-style): kazdy sample wystepuje `copies` razy
@@ -519,6 +568,7 @@ class ASRDataset(Dataset):
         # (inne tempo/szum/SpecAugment). `entries * n` powiela referencje (tanio,
         # bez kopiowania dictow ani audio). Tylko dla augment=True; N x kroki/epoke.
         copies = max(1, int(copies)) if augment else 1
+
         if copies > 1:
             entries = entries * copies
             logger.info(f"Duplikacja danych: {copies}x -> {len(entries)} sampli/epoke")
@@ -628,14 +678,18 @@ class ASRDataset(Dataset):
             entries = [json.loads(line) for line in f if line.strip()]
 
         tasks = []
+
         for entry in entries:
             out_path = out_dir / feature_cache_name(entry["audio_path"])
+
             if not out_path.exists():
                 tasks.append((entry["audio_path"], str(out_path)))
+
         logger.info(f"Do policzenia: {len(tasks)}/{len(entries)} plikow")
 
         if n_workers <= 1:
             _precompute_init(audio_cfg)
+
             for task in tqdm(tasks, desc="ekstrakcja cech", dynamic_ncols=True):
                 _precompute_one(task)
         else:

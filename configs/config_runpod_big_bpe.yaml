@@ -18,6 +18,11 @@ data:
   bad_list_path: /workspace/aka-asr/data/bad_audio.txt  # denylist uszkodzonego audio:
                                   # wykluczane przy starcie, nowe dopisywane w trakcie
                                   # (cicho, bez spamu w logu). Trwa na volume miedzy runami.
+  max_token_frame_ratio: 0.5     # filtr U>T': odrzuc sample gdzie tokeny > 0.5*ramki
+                                  # po subsamplingu. Zdrowa mowa ma U/T' ~0.2 (p99.9=0.43);
+                                  # anomalie (krotki klip + dlugi tekst, max zmierzony 62!)
+                                  # rozrywaja loss_rnnt -> grad explosion -> blank-collapse.
+                                  # To BYLA przyczyna collapse na 4e-4 i 5e-4 (CV-26 validated).
 
 tokenizer:
   type: bpe

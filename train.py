@@ -958,6 +958,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         speed_perturb_factors=speed_factors,
         copies=int(aug_cfg.get("copies", 1)),
         bad_list_path=data.get("bad_list_path"),
+        max_token_frame_ratio=float(data.get("max_token_frame_ratio", 1.0)),
     )
     val_ds = ASRDataset(
         data["val_manifest_path"],
@@ -968,6 +969,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         min_duration=data.get("min_audio_len", 0.5),
         cache_dir=data.get("feature_cache_dir"),
         bad_list_path=data.get("bad_list_path"),
+        max_token_frame_ratio=float(data.get("max_token_frame_ratio", 1.0)),
     )
     collate = make_collate_fn(blank_id=0)
 
