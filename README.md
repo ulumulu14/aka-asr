@@ -157,7 +157,7 @@ Opcje treningu istotne przy większych runach (wszystkie w configu):
 
 Po dekodowaniu tekst może przejść przez wspólny pipeline (`postprocessing.PostProcessor`,
 ta sama kolejność w demo i w ewaluacji): **AutoFixer** (fine-tune plT5 - korekcja błędów
-ASR + truecasing, np. "warszawa"→"Warszawa", + interpunkcja) → **ITN** (`itn.py` -
+ASR + truecasing, np. "skarżysko - kamienna"→"Skarżysko-Kamienna", + interpunkcja) → **ITN** (`itn.py` -
 liczby słowami → cyfry; tylko warstwa wyświetlania, nie stosować przy liczeniu WER,
 bo referencje są w formie mówionej) → **RuleFixer** (`fixer/rules.py` - ręczne poprawki
 regex jako ostatnie sito, dla uporczywych błędów których model nie łapie; plik reguł
