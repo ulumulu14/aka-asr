@@ -43,8 +43,11 @@ class HfSync:
             from huggingface_hub import HfApi
 
             self.api = HfApi(token=token or os.environ.get("HF_TOKEN"))
-            self.api.create_repo(repo_id, repo_type="model", private=private, exist_ok=True)
-            logger.info(f"HF sync: {repo_id}/{self.prefix} (private={private})")
+            url = self.api.create_repo(repo_id, repo_type="model", private=private, exist_ok=True)
+            # repo_id bez namespace (np. "aka-asr-v1") -> HF rozwiazuje na
+            # <wlasciciel-tokenu>/aka-asr-v1; bierzemy pelna nazwe do uploadow
+            self.repo_id = getattr(url, "repo_id", None) or repo_id
+            logger.info(f"HF sync: {self.repo_id}/{self.prefix} (private={private})")
         except Exception as e:  # brak tokenu/pakietu/sieci -> sync off, trening leci
             logger.warning(f"HF sync wylaczony ({type(e).__name__}: {e})")
             self.enabled = False
