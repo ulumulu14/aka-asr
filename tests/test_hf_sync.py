@@ -19,8 +19,10 @@ class _FakeApi:
     def __init__(self, *a, **k):
         self.calls = []
 
-    def create_repo(self, *a, **k):
-        pass
+    def create_repo(self, repo_id, *a, **k):
+        # HF rozwiazuje repo_id bez namespace -> <owner>/name (jak realne create_repo)
+        full = repo_id if "/" in repo_id else f"owner/{repo_id}"
+        return type("RepoUrl", (), {"repo_id": full})()
 
     def upload_folder(self, **k):
         self.calls.append(("folder", k["path_in_repo"]))
@@ -43,6 +45,15 @@ def _enabled_sync(monkeypatch, run_subdir="conformer_big/2026-07-25"):
     monkeypatch.setattr(huggingface_hub, "HfApi", lambda *a, **k: fake)
     hf = HfSync("user/aka-asr-runs", run_subdir=run_subdir)
     return hf, fake
+
+
+def test_repo_id_without_namespace_resolved(monkeypatch):
+    # "aka-asr-v1" (bez namespace) -> HF rozwiazuje na <owner>/aka-asr-v1
+    import huggingface_hub
+
+    monkeypatch.setattr(huggingface_hub, "HfApi", lambda *a, **k: _FakeApi())
+    hf = HfSync("aka-asr-v1", run_subdir="conformer_big/x")
+    assert hf.repo_id == "owner/aka-asr-v1"
 
 
 def test_paths_are_run_subdir(monkeypatch, tmp_path):
