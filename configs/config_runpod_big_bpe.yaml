@@ -63,12 +63,11 @@ training:
                                  # wzrost vocab 37->513. Zmierzony koszt ~0,8x char.
                                  # try/except OOM w petli pomija skrajny batch.
   n_workers: 12
-  lr: 0.0005                     # 5e-4: run na 4e-4 byl NIEdouczony (best 17.10%, zjazd
-                                  # splaszczyl sie za wczesnie). 7e-4 rozjezdzalo RNN-T
-                                  # (loss_rnnt oscylowal 34<->254), ale teraz blank-bias
-                                  # + cosine trzymaja stabilnosc, wiec wyzszy peak jest
-                                  # bezpieczny i potrzebny na szybsza zbieznosc.
-                                  # (mid dzialal na 1e-3, ale mid=29M; big=131M wrazliwszy)
+  lr: 0.0004                     # 4e-4: ZNANY-DOBRY (jedyny run bez collapse = 17,10%
+                                  # mial 4e-4). 5e-4 PRZYWROCILO blank-collapse (2026-07-26:
+                                  # val_WER 100% przez 5 epok, greedy pusty) mimo blank-bias
+                                  # -4 -- cosine trzyma peak dluzej niz Noam, wiec 5e-4+cosine
+                                  # bylo za agresywne. Nie podnosic bez rozwiazania collapse.
   weight_decay: 0.000001
   warmup_steps: 4000
   lr_schedule: cosine            # zamiast Noama: liniowy warmup -> cosinusowy zjazd
