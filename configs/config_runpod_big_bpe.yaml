@@ -101,6 +101,11 @@ training:
   save_every_steps: 1000
   keep_last: 3
   wer_max_samples: 500
+  wer_random_subset: true        # WER na losowym podzbiorze val (staly seed) zamiast
+                                  # 500 NAJKROTSZYCH klipow (med 1.5s / 2 slowa, 70%
+                                  # komend bigos -- najtrudniejszy wycinek, mylil guard
+                                  # anty-collapse). UWAGA: liczby WER nieporownywalne
+                                  # 1:1 z historycznymi runami (tamte mierzyly shortest).
   max_symbols_per_step: 3
   compile: false
   tensorboard: true

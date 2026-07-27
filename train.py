@@ -105,6 +105,10 @@ class TrainConfig:
     log_every: int = 50
     eval_every_epochs: int = 1
     wer_max_samples: int | None = None  # ile sampli walidacji dekodowac do WER (None = wszystkie)
+    # WER na LOSOWYM podzbiorze batchy zamiast najkrotszych-N (dataset sortowany po
+    # duracji => stare zachowanie mierzylo 1-2-wyrazowe mikroklipy i mylilo guard).
+    # Zmienia porownywalnosc z historycznymi liczbami -- wlaczac per config.
+    wer_random_subset: bool = False
     tensorboard: bool = True
 
     # Checkpointy
@@ -344,6 +348,26 @@ def greedy_decode_batch(
 
 # val (loss + WER)
 @torch.no_grad()
+def _pick_decode_batches(
+    n_batches: int, n_total_samples: int, wer_max_samples: int | None, seed: int
+) -> set[int] | None:
+    """
+    Deterministyczny LOSOWY podzbior batchy do dekodowania WER. Dataset jest
+    posortowany po duracji, wiec "pierwsze N sampli" = najkrotsze klipy (1-2 slowa,
+    najtrudniejszy wycinek) -- WER na nich zaklamuje stan modelu i myli guard
+    anty-collapse. Losowe batche pokrywaja pelne spektrum dlugosci; staly seed =>
+    ten sam podzbior co epoke (stabilna metryka w obrebie runu).
+    None = dekoduj po staremu (od poczatku, najkrotsze) -- historyczna porownywalnosc.
+    """
+    if wer_max_samples is None or n_batches <= 1:
+        return None
+    avg_bs = max(1, round(n_total_samples / n_batches))
+    m = min(n_batches, math.ceil(wer_max_samples / avg_bs) + 2)  # +2 batche marginesu
+    order = list(range(n_batches))
+    random.Random(seed).shuffle(order)
+    return set(order[:m])
+
+
 def validate(
     model: ConformerTransducer,
     loader: DataLoader,
@@ -351,14 +375,21 @@ def validate(
     device: torch.device,
     max_symbols_per_step: int = 3,
     wer_max_samples: int | None = None,
+    wer_random_subset: bool = False,
+    wer_subset_seed: int = 42,
 ) -> dict:
     model.eval()
     total_loss = 0.0
     total_samples = 0
     refs: list[str] = []
     hyps: list[str] = []
+    decode_ids = (
+        _pick_decode_batches(len(loader), len(loader.dataset), wer_max_samples, wer_subset_seed)
+        if wer_random_subset
+        else None
+    )
 
-    for batch in tqdm(loader, desc="walidacja", dynamic_ncols=True, ascii=True):
+    for batch_idx, batch in enumerate(tqdm(loader, desc="walidacja", dynamic_ncols=True, ascii=True)):
         audio = batch["audio_features"].to(device)
         labels = batch["label_tokens"].to(device)
         targets = batch["targets"].to(device)
@@ -373,7 +404,8 @@ def validate(
         total_samples += bs
 
         # Greedy decode + WER (opcjonalnie tylko na czesci walidacji -- decode jest drogi)
-        if wer_max_samples is None or len(refs) < wer_max_samples:
+        in_subset = decode_ids is None or batch_idx in decode_ids
+        if in_subset and (wer_max_samples is None or len(refs) < wer_max_samples):
             hyp_ids = greedy_decode_batch(
                 model,
                 audio,
@@ -732,6 +764,8 @@ def train(
                     device,
                     max_symbols_per_step=cfg.max_symbols_per_step,
                     wer_max_samples=cfg.wer_max_samples,
+                    wer_random_subset=cfg.wer_random_subset,
+                    wer_subset_seed=cfg.seed,
                 )
                 logger.info(
                     f"[epoka {epoch:3d}] val_loss={metrics['loss']:.4f}  "
@@ -898,6 +932,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         log_every=int(tr.get("log_every", 50)),
         eval_every_epochs=int(tr.get("eval_every_epochs", 1)),
         wer_max_samples=tr.get("wer_max_samples"),
+        wer_random_subset=bool(tr.get("wer_random_subset", False)),
         tensorboard=bool(tr.get("tensorboard", True)),
         keep_last=int(tr.get("keep_last", 3)),
         save_every_steps=int(tr.get("save_every_steps", 1000)),
