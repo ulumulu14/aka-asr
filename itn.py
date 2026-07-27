@@ -130,16 +130,21 @@ def itn_pl(text: str) -> str:
     words = text.split()
     out: list[str] = []
     i = 0
+
     while i < len(words):
         parsed = _parse_number(words, i)
+
         if parsed is not None:
             value, n = parsed
+
             if n >= 2 or value >= 10:
                 out.append(str(value))
                 i += n
                 continue
+
         out.append(words[i])
         i += 1
+
     return " ".join(out)
 
 

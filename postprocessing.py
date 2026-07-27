@@ -38,13 +38,17 @@ class PostProcessor:
             from fixer import AutoFixer  # lazy: transformers ciezkie
 
             self.fixer = AutoFixer(fixer_dir, device=device)
+
         self.itn = itn
         self._itn_fn = None
+
         if itn:
             from itn import itn_pl
 
             self._itn_fn = itn_pl
+
         self.rules = None
+
         if rules_path:
             from fixer.rules import RuleFixer
 

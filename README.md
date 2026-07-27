@@ -147,11 +147,11 @@ Opcje treningu istotne przy większych runach (wszystkie w configu):
   ```bash
   python utils/evaluate_wer.py --checkpoint <ckpt> --manifest data/val_manifest_all.jsonl --beam-size 4
   ```
-- **Held-out ewaluacja finalnego modelu** (`utils/test_model.py`): WER + CER, rozbicie
+- **Held-out ewaluacja finalnego modelu** (`test.py`): WER + CER, rozbicie
   per źródło (widać gdzie model słaby), pewność, najgorsze przykłady, raport JSON.
   Odpalać na test secie NIETKNIĘTYM w treningu (nie val):
   ```bash
-  python utils/test_model.py --checkpoint <ckpt> --manifest data/test_manifest_all.jsonl --out report.json
+  python test.py --checkpoint <ckpt> --manifest data/test_manifest_all.jsonl --out report.json
   ```
 - **Pseudo-labeling / agreement-cleaning** (`utils/pseudo_label.py`): na naprawdę
   nieopisanym audio - pseudo-etykiety z filtrem pewności (`--min-score`); na audio
