@@ -11,7 +11,7 @@ Test set: wydziel test splity zrodel (nie uzywane w train/val), np.:
         --out data/test_manifest_cv.jsonl ...
     cat data/test_manifest_*.jsonl > data/test_manifest_all.jsonl
 
-    python utils/test_model.py --checkpoint checkpoints/conformer_big/<exp>/best.pt \
+    python test.py --checkpoint checkpoints/conformer_big/<exp>/best.pt \
         --manifest data/test_manifest_all.jsonl [--beam-size 4] [--out report.json]
 
 WER/CER liczone na formie znormalizowanej (lowercase, bez interpunkcji przez
@@ -26,7 +26,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import torch  # noqa: E402
 from torch.utils.data import DataLoader  # noqa: E402
