@@ -86,6 +86,11 @@ training:
   ctc_weight: 0.3                 # z powrotem 0.3 -- aux CTC nigdy nie byl problemem
                                   # (stabilny 5.6), podbicie do 0.5 nic nie dalo
   ctc_label_smoothing: 0.05      # wygladzanie tylko aux CTC (RNN-T bez zmian)
+  loss_spike_multiplier: 3.0     # skip batcha gdy loss_rnnt > 3x mediana ostatnich.
+                                  # Diagnoza z tb: filtr U>T' naprawil grad, ale zostaly
+                                  # spike loss_rnnt 212-312 (typowe 33-77) co ~epoke ->
+                                  # wybijaly model w blank (greedy pusty). 3x oddziela
+                                  # spike (4-6x) od normalnych wahan (~2x).
   collapse_abort_epochs: 5       # guard anty blank-collapse zluzowany (bylo 2): w
                                   # udanym runie 17,10% przelom przyszedl dopiero w
                                   # epoce 3 (66% WER) -- za ostry prog ubilby zdrowy,
