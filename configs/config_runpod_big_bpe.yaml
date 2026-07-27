@@ -41,11 +41,8 @@ augment:
   rir_prob: 0.5
   snr_db: [5, 25]
   speed_perturb: [0.9, 1.0, 1.1]  # perturbacja tempa (Kaldi); 1.0 = bez zmiany (~2/3 sampli)
-  copies: 2                       # duplikacja danych: kazdy sample 2x na epoke, KAZDA
-                                  # kopia z niezaleznie losowana kombinacja augmentacji.
-                                  # Lacznie widokow/sample = copies x epochs (2x100=200);
-                                  # przy wiekszym miksie (YODAS20+CV valid) wiecej realnej
-                                  # roznorodnosci -> 2 wystarcza. 2x kroki/epoke = 2x czas.
+  copies: 1                     # test B: jak w zdrowym runie 17,10% (copies weszlo
+                                  # pozniej); wrocic do 2 po potwierdzeniu stabilnosci
 
 model:
   size: big
@@ -75,11 +72,11 @@ training:
                                   # bylo za agresywne. Nie podnosic bez rozwiazania collapse.
   weight_decay: 0.000001
   warmup_steps: 4000
-  lr_schedule: cosine            # zamiast Noama: liniowy warmup -> cosinusowy zjazd
-                                 # do floora w total_steps (= kroki/epoke x epochs).
-                                 # Noam scinal LR do znikomego na dlugim runie (100
-                                 # epok); cosine trzyma sensowny LR do konca.
-  min_lr_ratio: 0.1              # floor = 0.1 * peak (4e-5) -> pozne epoki wciaz ucza
+  lr_schedule: noam            # POWROT do noama (bylo cosine): 4 collapse z rzedu na
+                                # cosine przy "tym samym" lr -- ale cosine trzyma peak
+                                # 4e-4 przez cale okno ucieczki z blanku, podczas gdy
+                                # zdrowy run 17,10% (noam) mial tam efektywnie 1.2-2.3e-4
+                                # (decay 1/sqrt po warmupie). To NIE bylo to samo 4e-4.
   grad_clip: 1.0
   accum_grad: 1
   amp_dtype: bf16
