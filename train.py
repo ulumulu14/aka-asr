@@ -15,7 +15,9 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import logging
 import math
 import random
+import statistics
 import time
+from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -91,6 +93,9 @@ class TrainConfig:
     ctc_weight: float = 0.3
     # Label smoothing aux CTC: interpolacja z rozkladem jednostajnym (0.0 wylacza)
     ctc_label_smoothing: float = 0.0
+    # Skip batchy ze spike loss_rnnt (> multiplier * mediana ostatnich) -- chroni
+    # RNN-T przed zlymi aktualizacjami z problematycznych sampli (0.0 wylacza)
+    loss_spike_multiplier: float = 0.0
 
     # AMP
     use_amp: bool = True
@@ -551,6 +556,8 @@ def train(
     t0 = time.time()
     epoch = start_epoch
     n_oom_skipped = 0  # batche pominiete przez CUDA OOM (skrajnie dlugie/geste)
+    n_spike_skipped = 0  # batche pominiete przez spike loss_rnnt
+    rnnt_hist: deque = deque(maxlen=200)  # ostatnie (kept) loss_rnnt -> mediana do wykrywania spike
 
     logger.info("Start treningu")
     epoch_bar = tqdm(
@@ -631,6 +638,20 @@ def train(
                         logger.warning(f"[krok {global_step}] loss={loss.item()} -- pomijam batch")
                         optimizer.zero_grad(set_to_none=True)
                         continue
+
+                    # Skip batchy ze spike loss_rnnt (problematyczne sample -> zla
+                    # aktualizacja wybija model w blank). Mediana ostatnich kept jako
+                    # odporny na outliery punkt odniesienia; aktywne po zebraniu >=100.
+                    if cfg.loss_spike_multiplier > 0:
+                        lr_val = loss_rnnt.item()
+                        if (
+                            len(rnnt_hist) >= 100
+                            and lr_val > statistics.median(rnnt_hist) * cfg.loss_spike_multiplier
+                        ):
+                            n_spike_skipped += 1
+                            optimizer.zero_grad(set_to_none=True)
+                            continue
+                        rnnt_hist.append(lr_val)  # tylko kept -> mediana = typowy loss
 
                     running_loss += loss.item() * audio.size(0)
                     running_n += audio.size(0)
@@ -779,7 +800,7 @@ def train(
 
         logger.info(
             f"Koniec treningu, najlepszy WER={best_wer:.2%} "
-            f"(batchy pominietych przez OOM: {n_oom_skipped})"
+            f"(batchy pominietych: OOM {n_oom_skipped}, spike loss_rnnt {n_spike_skipped})"
         )
     except (KeyboardInterrupt, CollapseAbort) as e:
         if isinstance(e, CollapseAbort):
@@ -871,6 +892,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         max_batch_duration=tr.get("max_batch_duration"),
         ctc_weight=float(tr.get("ctc_weight", 0.3)),
         ctc_label_smoothing=float(tr.get("ctc_label_smoothing", 0.0)),
+        loss_spike_multiplier=float(tr.get("loss_spike_multiplier", 0.0)),
         use_amp=bool(tr.get("use_amp", True)),
         amp_dtype=str(tr.get("amp_dtype", "bf16")),
         log_every=int(tr.get("log_every", 50)),
