@@ -34,4 +34,4 @@ aka_asr_demo_app/recordings/
 aka_asr_demo_app/*.wav
 
 # Claude Code (osobiste)
-.claude/settings.local.json
+.claude/
