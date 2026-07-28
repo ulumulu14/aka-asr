@@ -20,10 +20,16 @@ def _n_params(size, override=None):
     return sum(p.numel() for p in m.parameters())
 
 
-def test_sizes_ordered_smol_mid_big_custom():
-    # kazdy kolejny rozmiar wiekszy; custom domyslnie > big
-    n = {s: _n_params(s) for s in ("smol", "mid", "big", "custom")}
-    assert n["smol"] < n["mid"] < n["big"] < n["custom"]
+def test_sizes_ordered_smol_mid_big_giga():
+    # kazdy kolejny rozmiar wiekszy; giga to preset > big
+    n = {s: _n_params(s) for s in ("smol", "mid", "big", "giga")}
+    assert n["smol"] < n["mid"] < n["big"] < n["giga"]
+
+
+def test_custom_base_equals_big():
+    # custom = baza do nadpisywania przez model.dims; bez override rowny big
+    # (train.py wymaga dims przy size=custom -- tu sprawdzamy sama baze)
+    assert _n_params("custom") == _n_params("big")
 
 
 def test_dims_override_scales_model():

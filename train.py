@@ -1063,6 +1063,11 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     # Override wymiarow z configu (glownie dla model.size=custom, ale dziala dla
     # kazdego rozmiaru): user definiuje architekture bez ruszania model.py.
     dims_override = config.get("model", {}).get("dims") or {}
+    if model_size == "custom" and not dims_override and not resume_path:
+        raise click.ClickException(
+            "model.size=custom wymaga model.dims w configu (baza=big, nadpisz "
+            "dowolne pola); gotowy preset wiekszy niz big to model.size=giga"
+        )
     if dims_override:
         unknown = set(dims_override) - set(model_cfg)
         if unknown:

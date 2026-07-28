@@ -1,0 +1,78 @@
+# Trening na RunPodzie: giga (~319M param), pelny miks + augmentacja, tokenizer BPE.
+# Wariant config_runpod_big_bpe.yaml przeskalowany na model.size=giga (enc 768/20).
+#
+#   cd /workspace/aka-asr
+#   python train.py configs/config_runpod_giga_bpe.yaml
+#   python train.py configs/config_runpod_giga_bpe.yaml --resume /workspace/aka-asr/checkpoints/conformer_giga/<exp>/last.pt
+#
+# WYMAGA rozmiaru `giga` w MODEL_SIZES (model.py) -- git pull po commicie rename
+# custom->giga. Reszta wymagan jak big_bpe (bpe_pl.model w repo, dane: runpod/README.md).
+#
+# KALIBRACJA vs big (jedyne 3 zmiany, reszta = zwalidowany przepis cosine big):
+#   lr 2.5e-4 -> 2e-4        skala ~1/sqrt(width) 512->768; wiekszy model = wrazliwszy
+#                            (mid 1e-3 OK, big collapse przy 4e-4, zdrowy przy 2.5e-4)
+#   warmup 4000 -> 6000      wiekszy model potrzebuje dluzszego rozbiegu stabilnosci
+#   budzet 450 -> 300        aktywacje rosna ~1.7x (enc_dim 1.5x, layers 1.18x,
+#                            joint 640->768); 300 daje margines na H100 80GB --
+#                            SKALIBROWAC na realnym VRAM po 1. epoce (nvidia-smi)
+
+data:
+  train_manifest_path: /workspace/aka-asr/data/train_manifest_all.jsonl
+  val_manifest_path: /workspace/aka-asr/data/val_manifest_all.jsonl
+  max_audio_len: 20.0
+  min_audio_len: 0.5
+  feature_cache_dir: /workspace/aka-asr/data/features_cache
+  bad_list_path: /workspace/aka-asr/data/bad_audio.txt
+  max_token_frame_ratio: 0.5     # filtr U>T' -- patrz big_bpe (byla przyczyna collapse)
+
+tokenizer:
+  type: bpe
+  bpe_model_path: bpe_pl.model
+
+augment:
+  noise_dir: /workspace/aka-asr/data/RIRS_NOISES/pointsource_noises
+  rir_dir: /workspace/aka-asr/data/RIRS_NOISES/simulated_rirs
+  noise_prob: 0.5
+  rir_prob: 0.5
+  snr_db: [5, 25]
+  speed_perturb: [0.9, 1.0, 1.1]
+  copies: 1
+
+model:
+  size: giga
+  dropout: 0.1
+  blank_bias_init: -4.0          # anty blank-dominacja BPE, jak w big (tylko swiezy run)
+
+training:
+  epochs: 40
+  batch_size: 128                # cap na krotkich klipach; budzet ponizej wiaze pierwszy
+  max_batch_duration: 300.0      # 450 biga * ~1/1.5 (wzrost aktywacji giga); przy OOM
+                                 # zbic do 250, przy VRAM <70% mozna podniesc do 350
+  n_workers: 12
+  lr: 0.0002                     # peak cosine; NIE podnosic bez dowodu stabilnosci --
+                                 # historia: kazdy collapse biga zaczynal sie od za
+                                 # wysokiego efektywnego lr w oknie ucieczki z blanku
+  weight_decay: 0.000001
+  warmup_steps: 6000
+  lr_schedule: cosine
+  min_lr_ratio: 0.1              # floor = 2e-5
+  grad_clip: 1.0
+  accum_grad: 1
+  amp_dtype: bf16
+  ctc_weight: 0.3
+  ctc_label_smoothing: 0.05
+  loss_spike_multiplier: 3.0     # skip batcha przy spike loss_rnnt (jak big)
+  collapse_abort_epochs: 5       # guard anty blank-collapse (jak big)
+  log_every: 50
+  eval_every_epochs: 1
+  save_every_steps: 1000
+  keep_last: 3
+  wer_max_samples: 500
+  wer_random_subset: true
+  max_symbols_per_step: 3
+  compile: false
+  tensorboard: true
+  hf_repo: aka-asr-v1
+  hf_private: true
+  ckpt_root: /workspace/aka-asr/checkpoints
+  seed: 42

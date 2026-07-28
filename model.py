@@ -41,11 +41,9 @@ MODEL_SIZES = {
         pred_kernel=15,
         joint_dim=640,
     ),
-    # Rozmiar do definiowania przez uzytkownika repo: domyslnie WIEKSZY niz big,
-    # ale nadpisywalny w configu bez ruszania kodu -- `model.dims: {enc_dim: 1024,
-    # enc_layers: 24, ...}` podmienia dowolne pola (patrz train.py). enc_dim musi
-    # dzielic sie przez enc_heads (tu 768/12=64 na glowe).
-    "custom": dict(
+    # Preset wiekszy niz big (~319M): nastepny krok drabinki skalowania.
+    # enc_dim musi dzielic sie przez enc_heads (tu 768/12=64 na glowe).
+    "giga": dict(
         enc_layers=20,
         enc_dim=768,
         enc_heads=12,
@@ -55,6 +53,21 @@ MODEL_SIZES = {
         pred_heads=8,
         pred_kernel=15,
         joint_dim=768,
+    ),
+    # Rozmiar do definiowania przez uzytkownika: baza = big, a wlasciwa
+    # architektura przychodzi z configu -- `model.dims: {enc_dim: 1024,
+    # enc_layers: 24, ...}` podmienia dowolne pola (patrz train.py; size=custom
+    # bez model.dims to blad na starcie, zeby nie trenowac po cichu kopii biga).
+    "custom": dict(
+        enc_layers=17,
+        enc_dim=512,
+        enc_heads=8,
+        enc_kernel=31,
+        pred_layers=2,
+        pred_dim=640,
+        pred_heads=8,
+        pred_kernel=15,
+        joint_dim=640,
     ),
 }
 
