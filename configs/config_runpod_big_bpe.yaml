@@ -54,7 +54,7 @@ model:
                                   # to celuje w drugi problem (blank-dominacje)
 
 training:
-  epochs: 100                    # przy copies=2 na miksie ~600h: ~9k krokow/epoke,
+  epochs: 40                     # przy copies=2 na miksie ~600h: ~9k krokow/epoke,
                                  # ~33 min/epoka -> ~2,3 dnia H100 (na 438h: ~1,8 dnia).
                                  # best.pt na biezaco -> przy plateau mozna uciac
                                  # wczesniej; cosine trzyma LR do konca (floor 0.1).
@@ -65,18 +65,17 @@ training:
                                  # wzrost vocab 37->513. Zmierzony koszt ~0,8x char.
                                  # try/except OOM w petli pomija skrajny batch.
   n_workers: 12
-  lr: 0.0004                     # 4e-4: ZNANY-DOBRY (jedyny run bez collapse = 17,10%
-                                  # mial 4e-4). 5e-4 PRZYWROCILO blank-collapse (2026-07-26:
-                                  # val_WER 100% przez 5 epok, greedy pusty) mimo blank-bias
-                                  # -4 -- cosine trzyma peak dluzej niz Noam, wiec 5e-4+cosine
-                                  # bylo za agresywne. Nie podnosic bez rozwiazania collapse.
+  lr: 0.00025                  # 2.5e-4: poziom, na ktorym NOAM byl zdrowy w oknie
+                                  # ucieczki z blanku (efektywny lr ep1-5). cosine przy
+                                  # 4e-4 collapsowal (za wysoki peak); przy 2.5e-4 +
+                                  # blank-bias + spike-skip powinien dac floor BEZ collapse.
   weight_decay: 0.000001
   warmup_steps: 4000
-  lr_schedule: noam            # POWROT do noama (bylo cosine): 4 collapse z rzedu na
-                                # cosine przy "tym samym" lr -- ale cosine trzyma peak
-                                # 4e-4 przez cale okno ucieczki z blanku, podczas gdy
-                                # zdrowy run 17,10% (noam) mial tam efektywnie 1.2-2.3e-4
-                                # (decay 1/sqrt po warmupie). To NIE bylo to samo 4e-4.
+  lr_schedule: cosine          # POWROT do cosine (noam plateauowal na ~18,3% bo lr->0
+                                # przez decay 1/sqrt). cosine trzyma floor -> szansa na
+                                # nizsze plateau. Peak 2.5e-4 (nie 4e-4!) = klucz do
+                                # unikniecia collapse. min_lr_ratio ponizej.
+  min_lr_ratio: 0.1              # floor = 2.5e-5 (trzyma lr do konca, brak plateau noama)
   grad_clip: 1.0
   accum_grad: 1
   amp_dtype: bf16
