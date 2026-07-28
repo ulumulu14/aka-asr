@@ -139,16 +139,28 @@ raportuje ile; ew. podniesc limit). Powrot do surowych napisow (A/B): recznie
 
 Cel z 2a+2b: 2-3k h. Zrodla ktorych Granary nie ma (swieze podcasty, Sejm,
 wlasna kuracja YT) etykietujemy sami -- ten sam mechanizm co NVIDIA, nasz
-pipeline (nowe pliki, `requirements-pseudo.txt` + ffmpeg):
+pipeline (nowe pliki, `requirements-pseudo.txt` + ffmpeg).
+
+**LEGALNOSC KOMERCYJNA (wazne)**: bierzemy tylko Tier 1 (Sejm/instytucje publiczne
+= poza prawem autorskim, art. 4 pr.aut.) i Tier 2 (YouTube CC-BY). Bramka na dwoch
+poziomach: yt-dlp `--match-filter` pobiera TYLKO CC-BY, a longform2json
+`--require-license` odrzuca zrodla bez dowodu licencji w `.info.json` (fail-safe).
+Licencja+zrodlo sa nieslione do manifestu (slad atrybucji). NIE redystrybuujemy
+audio -- wysylamy tylko wagi. Przed launchem: opinia prawnika IP.
 
 ```bash
-# 1. Audio (przyklad YT; playlisty/kanaly wg wlasnej kuracji):
-yt-dlp -f bestaudio -x --audio-format m4a -o 'data/raw_yt/%(id)s.%(ext)s' <URL...>
+# 1a. YouTube CC-BY: pobierz TYLKO 'reuse allowed' + zapis metadanych (.info.json):
+yt-dlp --match-filter "license *= 'Creative Commons'" --write-info-json \
+    -f bestaudio -x --audio-format m4a -o 'data/raw_yt/%(id)s.%(ext)s' <URL...>
+# 1b. Sejm/instytucje (Tier 1, bez bramki -- to nie YT): wrzuc audio do data/raw_sejm/
 
-# 2. Segmentacja: dlugie pliki -> mowa 3-18 s (silero VAD) + manifest bez tekstu:
-python utils/datasets_conversion/longform2json.py data/raw_yt --out-root data/pseudo_yt
+# 2. Segmentacja: dlugie pliki -> mowa 3-18 s (silero VAD) + manifest bez tekstu.
+#    --require-license = druga bramka (odrzuca gdy .info.json != CC-BY); dla Sejm pomin.
+python utils/datasets_conversion/longform2json.py data/raw_yt --out-root data/pseudo_yt \
+    --require-license "Creative Commons"
+python utils/datasets_conversion/longform2json.py data/raw_sejm --out-root data/pseudo_sejm
 
-# 3. Etykiety Whisperem (batch 32+ na H100, 8-16 na RTX 5080; wznawialne):
+# 3. Etykiety Whisperem (batch 32+ na H100, 8-16 na RTX 5080; wznawialne; niesie licencje):
 python utils/pseudo_whisper.py --manifest data/pseudo_yt/manifest_nolabel.jsonl \
     --out data/pseudo_yt/manifest_whisper.jsonl --batch-size 32
 

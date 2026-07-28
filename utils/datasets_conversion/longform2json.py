@@ -72,6 +72,33 @@ def _safe_stem(path: Path) -> str:
     return stem[:80] or "audio"
 
 
+def _read_provenance(src: Path) -> dict:
+    """Metadane z sidecar .info.json (yt-dlp --write-info-json): licencja + zrodlo,
+    do bramki CC-BY i sladu atrybucji. Pusty dict gdy brak (wlasne audio/Sejm)."""
+    for cand in (src.with_suffix(".info.json"), Path(str(src) + ".info.json")):
+        if cand.exists():
+            try:
+                d = json.loads(cand.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                return {}
+            return {
+                "license": d.get("license") or "",
+                "source_id": d.get("id") or "",
+                "source_url": d.get("webpage_url") or "",
+                "uploader": d.get("uploader") or d.get("channel") or "",
+            }
+    return {}
+
+
+def _license_ok(prov: dict, require: str | None) -> bool:
+    """Bramka bezpieczenstwa: gdy `require` ustawione, zrodlo przechodzi TYLKO gdy
+    jego licencja (z .info.json) zawiera ten napis. Brak metadanych = brak dowodu
+    = odrzut (fail-safe dla harvestu komercyjnego)."""
+    if not require:
+        return True
+    return require.lower() in (prov.get("license") or "").lower()
+
+
 def _decode_to_wav(src: Path, tmp_dir: Path) -> Path:
     """Dowolny format -> tymczasowy wav 16 kHz mono (ffmpeg)."""
     tmp = tempfile.NamedTemporaryFile(suffix=".wav", dir=tmp_dir, delete=False)
@@ -93,6 +120,12 @@ def main() -> None:
     ap.add_argument("--max-seg", type=float, default=18.0)
     ap.add_argument("--merge-gap", type=float, default=0.5)
     ap.add_argument("--limit-sources", type=int, default=None, help="max plikow zrodlowych (pilot)")
+    ap.add_argument(
+        "--require-license", default=None,
+        help="bramka: pomin zrodla ktorych .info.json licencja nie zawiera tego napisu "
+        "(np. 'Creative Commons' -> tylko CC-BY; komercyjny harvest YT). Brak info.json "
+        "= odrzut. Dla wlasnego audio/Sejm (Tier 1) NIE ustawiac.",
+    )
     args = ap.parse_args()
 
     if shutil.which("ffmpeg") is None:
@@ -122,9 +155,15 @@ def main() -> None:
 
     vad = load_silero_vad()
     n_seg = 0
+    n_skip_lic = 0
     total_h = 0.0
     with open(manifest_path, "a", encoding="utf-8") as mf:
         for src in tqdm(sources, desc="zrodla", dynamic_ncols=True, ascii=True):
+            prov = _read_provenance(src)
+            if not _license_ok(prov, args.require_license):
+                tqdm.write(f"[skip-licencja] {src.name}: {prov.get('license') or 'brak info.json'}")
+                n_skip_lic += 1
+                continue
             try:
                 wav_path = _decode_to_wav(src, tmp_dir)
             except RuntimeError as e:
@@ -149,6 +188,9 @@ def main() -> None:
                     sf.write(seg_path, seg, SR, subtype="PCM_16")
                     entry = {"audio_path": str(seg_path.resolve()),
                              "duration": round(len(seg) / SR, 3), "text": ""}
+                    for k in ("license", "source_id", "source_url"):
+                        if prov.get(k):  # slad atrybucji CC-BY -> nieslie przez pipeline
+                            entry[k] = prov[k]
                     mf.write(json.dumps(entry, ensure_ascii=False) + "\n")
                     n_seg += 1
                     total_h += len(seg) / SR / 3600
@@ -160,6 +202,8 @@ def main() -> None:
                 wav_path.unlink(missing_ok=True)
 
     print(f"[OK] {n_seg} segmentow / {total_h:.1f} h -> {manifest_path}")
+    if args.require_license:
+        print(f"     odrzucone przez bramke licencji ({args.require_license!r}): {n_skip_lic} zrodel")
     print("nastepny krok: python utils/pseudo_whisper.py --manifest "
           f"{manifest_path} --out {out_root}/manifest_whisper.jsonl")
 

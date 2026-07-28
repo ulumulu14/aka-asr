@@ -131,11 +131,12 @@ def main() -> None:
                 if not ok:
                     dropped[reason] = dropped.get(reason, 0) + 1
                     continue
-                out_f.write(json.dumps(
-                    {"audio_path": e["audio_path"], "duration": e["duration"],
-                     "text": text.strip()},
-                    ensure_ascii=False,
-                ) + "\n")
+                out_entry = {"audio_path": e["audio_path"], "duration": e["duration"],
+                             "text": text.strip()}
+                for k in ("license", "source_id", "source_url"):  # slad atrybucji CC-BY
+                    if e.get(k):
+                        out_entry[k] = e[k]
+                out_f.write(json.dumps(out_entry, ensure_ascii=False) + "\n")
                 kept += 1
                 kept_h += e["duration"] / 3600
             out_f.flush()
