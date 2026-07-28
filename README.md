@@ -96,9 +96,9 @@ Pełny runbook (pobranie danych, TensorBoard, skalowanie miksu): `runpod/README.
 i `runpod/DATA_SCALING.md`.
 
 Rozmiary modelu (`--model_size` albo `model.size` w configu): `smol` (debug),
-`mid` (~30M, domyślny), `big` (~131M), `custom` (~319M, do własnych eksperymentów).
-`custom` ma domyślne wymiary większe niż `big`, ale przede wszystkim jest do
-zdefiniowania przez użytkownika **bez ruszania kodu** - nadpisz dowolne pola w configu:
+`mid` (~30M, domyślny), `big` (~131M), `giga` (~319M preset), `custom` (do własnych
+eksperymentów). `custom` to baza (= wymiary `big`) do zdefiniowania przez użytkownika
+**bez ruszania kodu** - wymaga nadpisania pól w configu (bez `model.dims` błąd na starcie):
 
 ```yaml
 model:
