@@ -59,6 +59,26 @@ BIGOS_TEXT_COLUMNS = ("ref_orig", "ref", "sentence", "text", "transcription")
 # audiopath_bigos ma pelna nazwe pliku (.wav); audioname jest bez rozszerzenia
 BIGOS_AUDIO_COLUMNS = ("audiopath_bigos", "audioname", "path", "file", "audio", "wav")
 
+# PELCRA (pelcra/pl-asr-pelcra-for-bigos): ten sam format co BIGOS (tsv+tar.gz per
+# split), 12 subsetow SPONTANICZNEJ mowy (telefon/rozmowy/wywiady/podcasty/VC).
+# LICENCJA CC BY-NC-ND -> WYLACZNIE benchmark/held-out (test/validation), NIE trening
+# komercyjny; dlatego subkomenda `pelcra` domyslnie NIE pobiera train splitu (42 GB).
+PELCRA_REPO = "pelcra/pl-asr-pelcra-for-bigos"
+PELCRA_SUBSETS = [
+    "ul-diabiz_poleval-22",
+    "ul-spokes_biz_bio-23",
+    "ul-spokes_biz_int-23",
+    "ul-spokes_biz_luz-23",
+    "ul-spokes_biz_pod-23",
+    "ul-spokes_biz_pres-23",
+    "ul-spokes_biz_vc-23",
+    "ul-spokes_biz_vc2-23",
+    "ul-spokes_biz_wyw-23",
+    "ul-spokes_mix_emo-18",
+    "ul-spokes_mix_luz-18",
+    "ul-spokes_mix_parl-18",
+]
+
 
 def token() -> str | None:
     return os.environ.get("HF_TOKEN")
@@ -106,17 +126,21 @@ def probe_durations(paths: list[Path], workers: int = 8) -> list[float | None]:
 
 
 def convert_bigos(args: argparse.Namespace) -> None:
+    # Wspolny konwerter formatu BIGOS (tsv+tar.gz per subset/split): repo/nazwa/splity
+    # z argow -> obsluguje tez PELCRA (subkomenda `pelcra` ustawia inne domyslne).
     import csv
 
-    out_root = args.out_root / "bigos"
-    per_split: dict[str, list[dict]] = {"train": [], "validation": [], "test": []}
+    repo = args.repo
+    name = args.name
+    out_root = args.out_root / name
+    per_split: dict[str, list[dict]] = {s: [] for s in ("train", "validation", "test")}
 
     for subset in args.subsets:
-        for split in ("train", "validation", "test"):
-            print(f"[bigos] {subset}/{split}")
+        for split in args.splits:
+            print(f"[{name}] {subset}/{split}")
             try:
                 tsv = hf_hub_download(
-                    BIGOS_REPO,
+                    repo,
                     f"data/{subset}/{split}.tsv",
                     repo_type="dataset",
                     token=token(),
@@ -128,7 +152,7 @@ def convert_bigos(args: argparse.Namespace) -> None:
             audio_dir = out_root / subset / split
             if not audio_dir.exists() or not any(audio_dir.rglob("*")):
                 tar = hf_hub_download(
-                    BIGOS_REPO,
+                    repo,
                     f"data/{subset}/{split}.tar.gz",
                     repo_type="dataset",
                     token=token(),
@@ -156,8 +180,10 @@ def convert_bigos(args: argparse.Namespace) -> None:
 
             paths, texts = [], []
             n_missing = 0
-            for name, text in rows:
-                base = Path(name).name
+            # UWAGA: nie nazywac zmiennej petli `name` -- przeslania args.name
+            # (raz kosztowalo manifest nazwany po ostatnim pliku wav)
+            for fname, text in rows:
+                base = Path(fname).name
                 p = by_name.get(base) or by_name.get(base + ".wav")
                 if p is None:
                     n_missing += 1
@@ -175,12 +201,12 @@ def convert_bigos(args: argparse.Namespace) -> None:
                     {"audio_path": str(p.resolve()), "duration": dur, "text": text}
                 )
 
-    write_manifest(per_split["train"], args.manifest_dir / "train_manifest_bigos.jsonl")
-    write_manifest(per_split["validation"], args.manifest_dir / "val_manifest_bigos.jsonl")
-    if per_split["test"]:
-        write_manifest(per_split["test"], args.manifest_dir / "test_manifest_bigos.jsonl")
-    else:
-        print("[INFO] test: refy puste/ukryte (benchmark BIGOS) -- brak manifestu test")
+    prefix = {"train": "train_manifest", "validation": "val_manifest", "test": "test_manifest"}
+    for split in args.splits:
+        if per_split[split]:
+            write_manifest(per_split[split], args.manifest_dir / f"{prefix[split]}_{name}.jsonl")
+        else:
+            print(f"[INFO] {split}: refy puste/ukryte albo brak danych -- bez manifestu")
 
 
 # ---------------------------------------------------------------- VoxPopuli
@@ -457,7 +483,22 @@ def main() -> None:
 
     p_bigos = sub.add_parser("bigos", help="amu-cai/pl-asr-bigos-v2")
     p_bigos.add_argument("--subsets", nargs="+", default=BIGOS_SUBSETS)
+    p_bigos.add_argument("--repo", default=BIGOS_REPO)
+    p_bigos.add_argument("--name", default="bigos", help="katalog audio i sufiks manifestow")
+    p_bigos.add_argument("--splits", nargs="+", default=["train", "validation", "test"],
+                         choices=["train", "validation", "test"])
     p_bigos.set_defaults(fn=convert_bigos)
+
+    p_pelcra = sub.add_parser(
+        "pelcra", help="pelcra/pl-asr-pelcra-for-bigos: spontaniczna, TYLKO benchmark (CC BY-NC-ND)"
+    )
+    p_pelcra.add_argument("--subsets", nargs="+", default=PELCRA_SUBSETS)
+    p_pelcra.add_argument("--repo", default=PELCRA_REPO)
+    p_pelcra.add_argument("--name", default="pelcra")
+    p_pelcra.add_argument("--splits", nargs="+", default=["test"],
+                          choices=["train", "validation", "test"],
+                          help="domyslnie tylko test (~4,6 GB); train 42 GB NIE do treningu (NC)")
+    p_pelcra.set_defaults(fn=convert_bigos)
 
     p_vox = sub.add_parser("voxpopuli", help="facebook/voxpopuli 'pl'")
     p_vox.set_defaults(fn=convert_voxpopuli)

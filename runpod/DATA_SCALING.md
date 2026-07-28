@@ -211,3 +211,19 @@ UWAGA liczby: ~73% etykiet Sejmu ma cyfry (artykuly/punkty/daty), a filtr trenin
 tnie cyfry. Do rozstrzygniecia: num2words pl (cyfry->slowa, ale mianownik zamiast
 odmiany) vs drop segmentow z cyframi (strata wolumenu) vs keep. Domena formalna
 (jak VoxPopuli) -> limitowac udzial w miksie.
+
+---
+
+## Held-out SPONTANICZNY: PELCRA (benchmark-only)
+
+`pelcra/pl-asr-pelcra-for-bigos` (gated auto; konto+token musza miec dostep do
+gated repos). **CC BY-NC-ND -> WYLACZNIE ewaluacja, NIE trening komercyjny.**
+Test split ma UKRYTE refy (benchmark) -> held-out = validation (~50 h, 12
+subsetow spontanicznej: rozmowy/wywiady/podcasty/VC/telefon):
+
+```bash
+python utils/datasets_conversion/hf2json.py pelcra --splits validation
+# -> data/pelcra/... + data/val_manifest_pelcra.jsonl (~28,5k sampli / ~49,6 h)
+python test.py --checkpoint <best_lub_avg.pt> --manifest data/val_manifest_pelcra.jsonl
+# test.py rozbija per-subset (pelcra:spokes_biz_luz itd.)
+```
