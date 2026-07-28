@@ -61,7 +61,12 @@ def _load_bundle(checkpoint_path: str) -> tuple:
 
     tok_meta = state["tokenizer"]
     if tok_meta["type"] == "bpe":
-        tokenizer = SentencePieceTokenizer(tok_meta["bpe_model_path"])
+        # checkpoint niesie sciezke wzgledna repo (np. "bpe_pl.model"); CWD apki
+        # to aka_asr_demo_app/, wiec wzgledna rozwiazujemy o root repo
+        bpe_path = Path(tok_meta["bpe_model_path"])
+        if not bpe_path.is_absolute() and not bpe_path.exists():
+            bpe_path = Path(__file__).resolve().parent.parent / bpe_path
+        tokenizer = SentencePieceTokenizer(str(bpe_path))
     else:
         tokenizer = CharTokenizer(alphabet=tok_meta["alphabet"])
 
