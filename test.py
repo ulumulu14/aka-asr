@@ -67,6 +67,9 @@ _LOWERCASE_REF = {"voxpopuli", "bigos"}
 
 
 def _source(path: str) -> str:
+    if "/pelcra/" in path:  # per-subset: ktora spontanicznosc boli (telefon/rozmowy/VC...)
+        m = re.search(r"/pelcra/ul-([a-z0-9_]+)-\d+/", path)
+        return f"pelcra:{m.group(1)}" if m else "pelcra"
     for key, name in _SOURCES:
         if key in path:
             return name
