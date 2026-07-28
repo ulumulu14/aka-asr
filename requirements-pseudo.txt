@@ -6,3 +6,4 @@
 silero-vad
 transformers>=4.40
 yt-dlp  # pobieranie audio (playlisty/kanaly YT): yt-dlp -f bestaudio -x --audio-format m4a
+num2words  # cyfry->slowa (spoken form) dla etykiet Sejm/pseudo

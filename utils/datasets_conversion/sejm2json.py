@@ -167,8 +167,15 @@ def cmd_fetch(args: argparse.Namespace) -> None:
 # ------------------------------------------------------------------ align
 
 def cmd_align(args: argparse.Namespace) -> None:
+    to_spoken = None
+    if args.spoken_numbers:  # cyfry stenogramu -> slowa (num2words, requirements-pseudo)
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        from utils.spoken_numbers import to_spoken_pl
+        to_spoken = to_spoken_pl
+
     steno_orig, steno_norm = tokenize_steno(args.steno.read_text(encoding="utf-8"))
-    print(f"[align] stenogram: {len(steno_norm)} slow")
+    print(f"[align] stenogram: {len(steno_norm)} slow"
+          + (" | cyfry->slowa: ON" if to_spoken else " | cyfry->slowa: OFF"))
 
     with open(args.whisper, encoding="utf-8") as f:
         entries = [json.loads(ln) for ln in f if ln.strip()]
@@ -192,6 +199,8 @@ def cmd_align(args: argparse.Namespace) -> None:
                 continue
             cursor = new_cursor  # przesun kotwice tylko przy trafieniu
             text = " ".join(res["orig"])
+            if to_spoken is not None:
+                text = to_spoken(text)  # cyfry -> forma mowiona (zachowuje wolumen)
             entry = {"audio_path": e["audio_path"], "duration": e["duration"],
                      "text": text, "dataset_source": "sejm"}
             for k in ("source_id", "source_url"):
@@ -233,7 +242,9 @@ def main() -> None:
     pa.add_argument("--max-wer", type=float, default=0.3,
                     help="prog zgodnosci: segment zachowany gdy WER(hyp,stenogram) <= tego")
     pa.add_argument("--window", type=int, default=600, help="okno szukania w slowach stenogramu")
-    pa.set_defaults(fn=cmd_align)
+    pa.add_argument("--no-spoken-numbers", dest="spoken_numbers", action="store_false",
+                    help="NIE zamieniaj cyfr na slowa (domyslnie zamienia -- filtr treningowy tnie cyfry)")
+    pa.set_defaults(fn=cmd_align, spoken_numbers=True)
 
     args = ap.parse_args()
     args.fn(args)
