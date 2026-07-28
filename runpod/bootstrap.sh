@@ -6,9 +6,12 @@
 # (dane i checkpointy MUSZA lezec na volume, zeby przezyly ubicie poda).
 #
 # Regeneruje pelny miks danych z zewnetrznych zrodel (tempo datacenter):
-#   bigos/voxpopuli/yodas -> Hugging Face (utils/datasets_conversion/hf2json.py)
-#   mls                   -> OpenSLR/fbaipublicfiles (tar.gz + librispeech2json.py)
-#   RIRS_NOISES           -> OpenSLR 28 (augmentacja)
+#   bigos/voxpopuli/yodas-granary -> Hugging Face (utils/datasets_conversion/hf2json.py)
+#   mls                           -> OpenSLR/fbaipublicfiles (tar.gz + librispeech2json.py)
+#   RIRS_NOISES                   -> OpenSLR 28 (augmentacja)
+# YODAS: od 2026-07-28 espnet/yodas-granary (pseudo Whisper-v3 + filtry NVIDII, ~680 h)
+# ZAMIAST surowych napisow espnet/yodas (379 h w 40 shardach); stary konwerter zostaje
+# jako `hf2json.py yodas` (manualnie), stare data/yodas_pl/ mozna skasowac (~44 GB).
 # CV (~5.7 GB) NIE jest regenerowany tutaj (cv2json wymaga surowego korpusu Mozilli).
 # Dosylasz go z lokala -- patrz runpod/README.md, sekcja "CV".
 #
@@ -21,7 +24,7 @@ set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-/workspace/aka-asr}"
 DATA_DIR="$REPO_DIR/data"
-YODAS_SHARDS="${YODAS_SHARDS:-20}"   # pl000 ma 78 shardow; wiecej = wiecej (brudnego) YT
+GRANARY_SHARDS="${GRANARY_SHARDS:-}" # puste = wszystkie (140/split, ~78 GB); liczba = pilot
 MLS_URL="${MLS_URL:-https://dl.fbaipublicfiles.com/mls/mls_polish.tar.gz}"
 RIRS_URL="${RIRS_URL:-https://www.openslr.org/resources/28/rirs_noises.zip}"
 
@@ -46,12 +49,12 @@ fi
 # --- 2. Zrodla z HF (bigos / voxpopuli / yodas) -----------------------------
 HF2JSON="python utils/datasets_conversion/hf2json.py --out-root $DATA_DIR --manifest-dir $DATA_DIR"
 
-# Re-run gdy mamy mniej shardow niz zadano (hf2json pomija juz pobrane, dociaga
-# brakujace i przebudowuje manifest) -- pozwala zwiekszyc YODAS_SHARDS bez czyszczenia.
-YODAS_HAVE=$(ls -d "$DATA_DIR"/yodas_pl/[0-9]* 2>/dev/null | wc -l)
-if [ ! -f "$DATA_DIR/train_manifest_yodas.jsonl" ] || [ "$YODAS_HAVE" -lt "$YODAS_SHARDS" ]; then
-  log "YODAS ($YODAS_SHARDS shardow; mam $YODAS_HAVE)"; $HF2JSON yodas --shards "$YODAS_SHARDS"
-else log "YODAS -- $YODAS_HAVE shardow >= $YODAS_SHARDS, pomijam"; fi
+# Konwerter ma fragment-resume (pomija przerobione parquety), wiec re-run po
+# zwiekszeniu GRANARY_SHARDS: skasuj train_manifest_yodas_granary.jsonl i odpal.
+if [ ! -f "$DATA_DIR/train_manifest_yodas_granary.jsonl" ]; then
+  log "YODAS-GRANARY (${GRANARY_SHARDS:-wszystkie} shardow/split)"
+  $HF2JSON yodas_granary ${GRANARY_SHARDS:+--shards "$GRANARY_SHARDS"}
+else log "YODAS-GRANARY -- manifest istnieje, pomijam"; fi
 
 if [ ! -f "$DATA_DIR/train_manifest_voxpopuli.jsonl" ]; then
   log "VoxPopuli"; $HF2JSON voxpopuli
@@ -112,7 +115,7 @@ cat_if \
   "$DATA_DIR/train_manifest_mls.jsonl" \
   "$DATA_DIR/train_manifest_bigos.jsonl" \
   "$DATA_DIR/train_manifest_voxpopuli.jsonl" \
-  "$DATA_DIR/train_manifest_yodas.jsonl" \
+  "$DATA_DIR/train_manifest_yodas_granary.jsonl" \
   > "$DATA_DIR/train_manifest_all.jsonl"
 
 cat_if \

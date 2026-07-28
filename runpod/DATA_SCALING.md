@@ -8,18 +8,12 @@ ale skręca w YT), **pseudo-labeling** (skalowalne, faza po dobrym modelu).
 
 ---
 
-## 1. YODAS -> 20 shardów (łatwe, na podzie)
+## 1. YODAS surowe shardy -- ZASTAPIONE (2026-07-28)
 
-`YODAS_SHARDS` domyślnie 20 (pl000 ma 78). Bootstrap dociąga brakujące shardy i
-przebudowuje manifest (pomija już pobrane), gdy `mam < YODAS_SHARDS`:
-
-```bash
-cd /workspace/aka-asr && git pull
-bash runpod/bootstrap.sh                 # dociagnie shardy 10-19, przebuduje *_all
-# wiecej: YODAS_SHARDS=30 bash runpod/bootstrap.sh
-```
-Sanity: `grep -c . data/train_manifest_yodas.jsonl` (~2x po 20 shardach) i
-`wc -l data/train_manifest_all.jsonl`. Uwaga: 20 shardów robi z YODAS ~60% miksu.
+Surowe napisy YT (`hf2json.py yodas`, env `YODAS_SHARDS`) zastapione w bootstrapie
+przez **yodas-granary** (FAZA 2a nizej): to samo audio, pseudo-etykiety Whisper-v3
+po filtrach NVIDII, ~680 h vs 379 h. Stary konwerter zostaje na wypadek A/B
+(`hf2json.py yodas --shards N` recznie); stare `data/yodas_pl/` do skasowania (~44 GB).
 
 ---
 
@@ -74,7 +68,11 @@ common_voice_25_0, gated) jak bigos/voxpopuli -- wtedy zero URL-i i tarow.
 
 ---
 
-## 3. Pseudo-labeling / czyszczenie agreement
+## 3. Pseudo-labeling / czyszczenie agreement -- ZASTAPIONE przez FAZA 2a
+
+(Historyczne: czyszczenie SUROWYCH napisow yodas naszym modelem. yodas-granary
+robi to lepiej u zrodla -- Whisper-v3 + QE NVIDII. Zostaje jako wzorzec dla
+przyszlych zrodel z watpliwymi etykietami.)
 
 **Fakt (sprawdzone na HF)**: `pl000` to JEDYNY polski subset YODAS (78 shardów,
 napisy MANUALNE); `pl100` (auto) nie istnieje. Wniosek: klasyczny pseudo-labeling
@@ -116,22 +114,24 @@ python utils/datasets_conversion/hf2json.py yodas_granary --shards 1
 python utils/datasets_conversion/hf2json.py yodas_granary   # df -h /workspace najpierw!
 ```
 
-**OSOBNY manifest + config (decyzja: BEZ swapu w bootstrapie)**: bootstrap dalej
-buduje stary `train_manifest_all.jsonl`; wariant granary sklejamy OBOK i trenujemy
-z `configs/config_runpod_big_bpe_granary.yaml` (komplet komend w naglowku yamla):
+**SWAP w bootstrapie (decyzja 2026-07-28)**: bootstrap buduje `train_manifest_all.jsonl`
+z `train_manifest_yodas_granary.jsonl` zamiast surowego yodas -- glowny config
+(`config_runpod_big_bpe.yaml`) trenuje na nowym miksie bez zmian w yamlu:
 
 ```bash
-cat data/train_manifest_{cv,mls,bigos,voxpopuli}.jsonl \
-    data/train_manifest_yodas_granary.jsonl > data/train_manifest_all_granary.jsonl
-CONFIG=configs/config_runpod_big_bpe_granary.yaml bash runpod/train.sh
+cd /workspace/aka-asr && git pull
+df -h /workspace                        # ~78 GB wav + parquety transientnie!
+bash runpod/bootstrap.sh                # pilot: GRANARY_SHARDS=1 bash runpod/bootstrap.sh
+rm -rf data/yodas_pl data/train_manifest_yodas.jsonl   # stare surowe (~44 GB)
+CONFIG=configs/config_runpod_big_bpe.yaml bash runpod/train.sh
 ```
 
-Val TEN SAM (nie mial yodas) -> val_WER porownywalny 1:1 = czysty A/B miksow.
-NIE laczyc obu yodasow w jednym manifescie (to samo zrodlowe audio YT -> duplikaty
-z konfliktujacymi etykietami). Dysk: oba miksy naraz = stare wavy yodas ~44 GB +
-granary ~78 GB; po rozstrzygnieciu A/B przegrany katalog do skasowania. ~4% sampli
-granary ma cyfry (odpadna na filtrze treningowym); segmenty do 40 s: czesc >20 s
-utnie `max_audio_len` (konwerter raportuje ile; ew. podniesc limit).
+Val bez zmian (nie mial yodas) -> val_WER porownywalny miedzy miksami. NIE laczyc
+obu yodasow w jednym manifescie (to samo zrodlowe audio YT -> duplikaty z
+konfliktujacymi etykietami). ~4% sampli granary ma cyfry (odpadna na filtrze
+treningowym); segmenty do 40 s: czesc >20 s utnie `max_audio_len` (konwerter
+raportuje ile; ew. podniesc limit). Powrot do surowych napisow (A/B): recznie
+`hf2json.py yodas --shards 40` + podmiana w sklejce.
 
 ---
 
