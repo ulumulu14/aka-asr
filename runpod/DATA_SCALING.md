@@ -176,3 +176,38 @@ kroku 2 i `--limit 200` w kroku 3, obejrzec pary przed masowka.
 Do sprawdzenia (wieksze zrodla tej samej rodziny): `nvidia/Granary` ma dla pl
 takze YouTube-Commons i MOSEL (nieopisane VoxPopuli) -- potencjalnie tysiace
 godzin; zweryfikowac strukture/rozmiar zanim wejdzie do planu.
+
+---
+
+## FAZA 2c: Sejm ground-truth (stenogramy z api.sejm.gov.pl)
+
+Sejm = Tier 1 (art. 4 pr.aut., materialy urzedowe). Stenogramy to LUDZKIE
+etykiety (nie pseudo Whispera) -> najwyzsza jakosc. API daje per-wypowiedz:
+mowca + czasy + tekst. Stenogram jest REDAGOWANY, wiec parujemy przez AGREEMENT:
+Whisper = kotwica alignmentu, stenogram = ground-truth. Pilot (12 min posiedzenia
+62): 26/28 segmentow zachowane, WER(whisper,stenogram)=0.064, stenogram POPRAWIL
+bledy Whispera (61 vs 67 posiedzenie, "nad tym wnioskiem", casing).
+
+```bash
+# 1. stenogram (rownolegle; --max-statements na pilot):
+python utils/datasets_conversion/sejm2json.py fetch --num 62 --date 2026-07-15 \
+    --out data/sejm/steno_62.txt
+# 2. audio: pobierz format audio-only (139=m4a 49k) i utnij (yt-dlp --download-sections
+#    na dlugich sesjach dostaje 403 od ffmpeg -> pobierz caly maly format natywnie, tnij lokalnie):
+python -m yt_dlp -f 139 -o data/sejm/raw/%(id)s.%(ext)s "https://youtube.com/watch?v=<ID>"
+ffmpeg -i data/sejm/raw/<ID>.m4a -ar 16000 -ac 1 data/sejm/raw/<ID>.wav   # caly dzien
+# 3. VAD (Tier 1 -> bez --require-license) + Whisper KOTWICA (--keep-digits! mowa
+#    sejmowa pelna liczb, tu Whisper nie jest etykieta wiec filtr cyfr off):
+python utils/datasets_conversion/longform2json.py data/sejm/raw --out-root data/sejm/seg
+python utils/pseudo_whisper.py --manifest data/sejm/seg/manifest_nolabel.jsonl \
+    --out data/sejm/seg/manifest_whisper.jsonl --batch-size 32 --keep-digits
+# 4. agreement -> ground-truth:
+python utils/datasets_conversion/sejm2json.py align \
+    --whisper data/sejm/seg/manifest_whisper.jsonl --steno data/sejm/steno_62.txt \
+    --out data/sejm/manifest_sejm.jsonl --max-wer 0.3
+```
+
+UWAGA liczby: ~73% etykiet Sejmu ma cyfry (artykuly/punkty/daty), a filtr treningowy
+tnie cyfry. Do rozstrzygniecia: num2words pl (cyfry->slowa, ale mianownik zamiast
+odmiany) vs drop segmentow z cyframi (strata wolumenu) vs keep. Domena formalna
+(jak VoxPopuli) -> limitowac udzial w miksie.
