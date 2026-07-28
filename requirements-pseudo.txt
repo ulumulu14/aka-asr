@@ -1,0 +1,8 @@
+# FAZA 2 -- destylacja / pseudo-labeling nieopisanego audio:
+#   longform2json.py (VAD + segmentacja) i pseudo_whisper.py (Whisper large-v3).
+# Instalowac OSOBNO od requirements.txt; NIE na podzie treningowym w trakcie
+# treningu. ffmpeg wymagany w PATH (apt install ffmpeg). torch/soundfile/tqdm
+# sa juz w glownym requirements.txt.
+silero-vad
+transformers>=4.40
+yt-dlp  # pobieranie audio (playlisty/kanaly YT): yt-dlp -f bestaudio -x --audio-format m4a

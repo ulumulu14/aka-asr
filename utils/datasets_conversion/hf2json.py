@@ -346,6 +346,99 @@ def convert_yodas(args: argparse.Namespace) -> None:
     write_manifest(entries, args.manifest_dir / "train_manifest_yodas.jsonl")
 
 
+# ---------------------------------------------------------------- YODAS-GRANARY
+
+# espnet/yodas-granary: audio YODAS2 + pseudo-etykiety Whisper large-v3 przepuszczone
+# przez pipeline filtrujacy NVIDII (Granary, arXiv 2505.13404). Czystsze niz surowe
+# napisy YT z espnet/yodas i wiecej godzin (pl ~680 h vs 379 h w 40 shardach yodas).
+# Tekst z casingiem+interpunkcja. Pin rewizji = reprodukowalnosc (lekcja voxpopuli).
+YODAS_GRANARY_REPO = "espnet/yodas-granary"
+YODAS_GRANARY_REV = "969944574ea3f37890beaf67ea651e160cfaf043"
+YODAS_GRANARY_SPLITS = ("asr_only", "ast")  # oba maja 'text'; ast dodatkowo tlumaczenie EN
+
+
+def _granary_parquet_paths(split: str) -> list[str]:
+    from huggingface_hub import HfApi
+
+    tree = HfApi().list_repo_tree(
+        YODAS_GRANARY_REPO,
+        repo_type="dataset",
+        revision=YODAS_GRANARY_REV,
+        path_in_repo=f"data/pl000/{split}",
+        recursive=True,
+    )
+    return sorted(f.path for f in tree if f.path.endswith(".parquet"))
+
+
+def convert_yodas_granary(args: argparse.Namespace) -> None:
+    # Parquet na dysk -> pyarrow batchami -> kasujemy (jak voxpopuli: streaming
+    # `datasets` buforuje w RAM bez limitu). audio.bytes to GOTOWY wav 16k PCM16
+    # (naglowek RIFF w srodku) -> zapis bajtow wprost, zero re-enkodowania.
+    # Fragment manifestu per parquet = wznawialnosc.
+    import pyarrow.parquet as pq
+
+    fragments: list[Path] = []
+    n_long = 0  # segmenty > 20 s (utnie je filtr max_audio_len w treningu)
+    for split in args.splits:
+        out_dir = args.out_root / "yodas_granary_pl" / split
+        out_dir.mkdir(parents=True, exist_ok=True)
+        rpaths = _granary_parquet_paths(split)
+        if args.shards:
+            rpaths = rpaths[: args.shards]
+        for rpath in rpaths:
+            frag = out_dir / f".manifest_{Path(rpath).stem}.jsonl"
+            fragments.append(frag)
+            if frag.exists():
+                print(f"[granary] {rpath}: fragment istnieje -- pomijam")
+                continue
+
+            local = Path(
+                hf_hub_download(
+                    YODAS_GRANARY_REPO,
+                    rpath,
+                    repo_type="dataset",
+                    revision=YODAS_GRANARY_REV,
+                    local_dir=args.out_root / "_hf_tmp",
+                )
+            )
+            entries: list[dict] = []
+            shard_dir = out_dir / Path(rpath).stem
+            shard_dir.mkdir(exist_ok=True)
+            pf = pq.ParquetFile(local)
+            for batch in pf.iter_batches(
+                batch_size=64, columns=["utt_id", "audio", "duration", "lang", "text"]
+            ):
+                for row in batch.to_pylist():
+                    text = (row.get("text") or "").strip()
+                    if not text or row.get("lang") != "<pl>":
+                        continue
+                    dur = round(float(row["duration"]), 3)
+                    if dur > 20.0:
+                        n_long += 1
+                    out_path = shard_dir / f"{row['utt_id']}.wav"
+                    if not out_path.exists():
+                        out_path.write_bytes(row["audio"]["bytes"])
+                    entries.append(
+                        {"audio_path": str(out_path.resolve()), "duration": dur, "text": text}
+                    )
+            pf.close()
+            write_manifest(entries, frag)
+            local.unlink(missing_ok=True)
+
+    manifest_path = args.manifest_dir / "train_manifest_yodas_granary.jsonl"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    n, hours = 0, 0.0
+    with manifest_path.open("w", encoding="utf-8") as out:
+        for frag in fragments:
+            with frag.open(encoding="utf-8") as f:
+                for line in f:
+                    out.write(line)
+                    n += 1
+                    hours += json.loads(line)["duration"] / 3600
+    print(f"[OK] {manifest_path}: {n} sampli, {hours:.1f} h "
+          f"(w tym {n_long} segmentow >20 s -- utnie je max_audio_len)")
+
+
 # ---------------------------------------------------------------- CLI
 
 
@@ -374,6 +467,17 @@ def main() -> None:
         "--shards", type=int, default=10, help="Ile shardow pobrac (1 shard ~ 0.9 GB; calosc = 78)"
     )
     p_yodas.set_defaults(fn=convert_yodas)
+
+    p_gran = sub.add_parser(
+        "yodas_granary", help="espnet/yodas-granary pl000 (pseudo Whisper-v3 + filtry NVIDII)"
+    )
+    p_gran.add_argument(
+        "--shards", type=int, default=None,
+        help="Ile parquetow NA SPLIT (pilot); domyslnie wszystkie (140+140, ~78 GB)",
+    )
+    p_gran.add_argument("--splits", nargs="+", default=list(YODAS_GRANARY_SPLITS),
+                        choices=YODAS_GRANARY_SPLITS)
+    p_gran.set_defaults(fn=convert_yodas_granary)
 
     args = parser.parse_args()
     args.fn(args)
