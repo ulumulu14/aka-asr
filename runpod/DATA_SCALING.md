@@ -98,3 +98,69 @@ python utils/pseudo_label.py --checkpoint <best_lub_avg.pt> \
 
 Dla przyszlych naprawde nieopisanych zrodel: `--min-score -0.4` (ostry) ...
 `-0.7` (luzny), `--max-tokens-per-sec 25`, pseudo w OSOBNYM manifescie (latwy A/B).
+
+---
+
+## FAZA 2a: yodas-granary -- gotowa destylacja NVIDII (PRIORYTET, zero GPU)
+
+`espnet/yodas-granary` = audio YODAS2 z pseudo-etykietami **Whisper large-v3**
+przepuszczonymi przez pipeline filtrujacy NVIDII (Granary, arXiv 2505.13404;
+CC-BY-3.0, niegated). Polski: ~293k sampli / **~680 h** (vs nasze yodas-40
+z surowych napisow: 379 h) -- wiecej godzin I czystsze etykiety (casing,
+interpunkcja, odfiltrowane halucynacje). To robi za nas odlozony
+agreement-cleaning i zastepuje pomysl "yodas 41-78 surowe".
+
+```bash
+# pilot (1 parquet na split), potem calosc (~78 GB parquet, transientnie kasowane):
+python utils/datasets_conversion/hf2json.py yodas_granary --shards 1
+python utils/datasets_conversion/hf2json.py yodas_granary   # df -h /workspace najpierw!
+```
+
+**OSOBNY manifest + config (decyzja: BEZ swapu w bootstrapie)**: bootstrap dalej
+buduje stary `train_manifest_all.jsonl`; wariant granary sklejamy OBOK i trenujemy
+z `configs/config_runpod_big_bpe_granary.yaml` (komplet komend w naglowku yamla):
+
+```bash
+cat data/train_manifest_{cv,mls,bigos,voxpopuli}.jsonl \
+    data/train_manifest_yodas_granary.jsonl > data/train_manifest_all_granary.jsonl
+CONFIG=configs/config_runpod_big_bpe_granary.yaml bash runpod/train.sh
+```
+
+Val TEN SAM (nie mial yodas) -> val_WER porownywalny 1:1 = czysty A/B miksow.
+NIE laczyc obu yodasow w jednym manifescie (to samo zrodlowe audio YT -> duplikaty
+z konfliktujacymi etykietami). Dysk: oba miksy naraz = stare wavy yodas ~44 GB +
+granary ~78 GB; po rozstrzygnieciu A/B przegrany katalog do skasowania. ~4% sampli
+granary ma cyfry (odpadna na filtrze treningowym); segmenty do 40 s: czesc >20 s
+utnie `max_audio_len` (konwerter raportuje ile; ew. podniesc limit).
+
+---
+
+## FAZA 2b: destylacja z Whisper large-v3 (wlasne nieopisane audio)
+
+Cel z 2a+2b: 2-3k h. Zrodla ktorych Granary nie ma (swieze podcasty, Sejm,
+wlasna kuracja YT) etykietujemy sami -- ten sam mechanizm co NVIDIA, nasz
+pipeline (nowe pliki, `requirements-pseudo.txt` + ffmpeg):
+
+```bash
+# 1. Audio (przyklad YT; playlisty/kanaly wg wlasnej kuracji):
+yt-dlp -f bestaudio -x --audio-format m4a -o 'data/raw_yt/%(id)s.%(ext)s' <URL...>
+
+# 2. Segmentacja: dlugie pliki -> mowa 3-18 s (silero VAD) + manifest bez tekstu:
+python utils/datasets_conversion/longform2json.py data/raw_yt --out-root data/pseudo_yt
+
+# 3. Etykiety Whisperem (batch 32+ na H100, 8-16 na RTX 5080; wznawialne):
+python utils/pseudo_whisper.py --manifest data/pseudo_yt/manifest_nolabel.jsonl \
+    --out data/pseudo_yt/manifest_whisper.jsonl --batch-size 32
+
+# 4. Do miksu (OSOBNY manifest = latwy A/B ablacji):
+cat data/pseudo_yt/manifest_whisper.jsonl >> data/train_manifest_all.jsonl
+```
+
+Filtry jakosci wbudowane w pseudo_whisper.py (cps, powtorzenia, watermarki
+napisow, cyfry); raport odrzutow na koncu -- >30% = obejrzec zrodlo. Val/test
+NIE dostaja pseudo (zostaja recznie opisane). Pilot: `--limit-sources 3` w
+kroku 2 i `--limit 200` w kroku 3, obejrzec pary przed masowka.
+
+Do sprawdzenia (wieksze zrodla tej samej rodziny): `nvidia/Granary` ma dla pl
+takze YouTube-Commons i MOSEL (nieopisane VoxPopuli) -- potencjalnie tysiace
+godzin; zweryfikowac strukture/rozmiar zanim wejdzie do planu.
