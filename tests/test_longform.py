@@ -2,7 +2,7 @@
 i filtry jakosci pseudo-etykiet (pseudo_whisper.quality_check). Czyste funkcje,
 bez audio/GPU/transformers (importy ciezkie sa lazy w main())."""
 
-from utils.datasets_conversion.longform2json import pack_spans
+from utils.datasets_conversion.longform2json import _license_ok, pack_spans
 from utils.pseudo_whisper import quality_check
 
 
@@ -62,3 +62,20 @@ def test_quality_cps_bounds():
 def test_quality_drops_decoder_loop():
     text = " ".join(["tak jest"] * 12)  # petla dekodera: te same trigramy w kolko
     assert quality_check(text, 8.0)[1] == "powtorzenia"
+
+
+def test_license_gate_off_when_not_required():
+    # brak wymogu (Tier 1: Sejm/wlasne audio) -> wszystko przechodzi
+    assert _license_ok({"license": "Standard YouTube License"}, None)
+    assert _license_ok({}, None)
+
+
+def test_license_gate_accepts_cc_by():
+    prov = {"license": "Creative Commons Attribution license (reuse allowed)"}
+    assert _license_ok(prov, "Creative Commons")
+
+
+def test_license_gate_rejects_standard_and_missing():
+    # fail-safe: standardowa licencja YT ORAZ brak info.json -> odrzut przy wymogu CC
+    assert not _license_ok({"license": "Standard YouTube License"}, "Creative Commons")
+    assert not _license_ok({}, "Creative Commons")
