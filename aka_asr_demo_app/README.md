@@ -108,8 +108,13 @@ ASR_DEMO_AFFECT=1 ./target/release/aka_asr_demo_app --input-wav test.wav --no-sa
 
 Prozodia liczona bez ML (pseudo-VAD energetyczny): tempo mowy, pauzy wewnątrz
 wypowiedzi, głośność/dynamika, wahania (`yyy`/`eee` z SUROWEGO tekstu, zanim
-postprocessing je wyczyści). Bez flagi wyjście bez zmian. Roadmapa v1: głowica
-walencja/pobudzenie na zamrożonym encoderze (pole `affect` obok `prosody`).
+postprocessing je wyczyści). Bez flagi wyjście bez zmian.
+
+v1 (opcjonalna głowica walencja/pobudzenie na zamrożonym encoderze; wagi z
+`affect/train_head.py`): `ASR_DEMO_AFFECT_HEAD=<head.pt>` dokłada pole
+`"affect": {"valence": -0.46, "arousal": 0.25, "confidence": 0.63}` (confidence =
+val CCC głowicy; przy niskim — pole ignorować). Uwaga: wagi trenowane na nEMO
+(CC-BY-NC-SA) są prototypem niekomercyjnym.
 
 ## Test bez mikrofonu
 
