@@ -13,7 +13,9 @@ są identyczne z walidacją treningową:
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -124,6 +126,59 @@ def _features_from_waveform(
     return cmvn(extractor.features_from_waveform(wav_t))
 
 
+# --- affect v0 (ASR_DEMO_AFFECT=1): prozodia liczona z audio+tekstu, BEZ modelu ---
+
+_FILLERS = re.compile(r"\b(y{2,}|e{2,}|a{3,}|hm+|mhm|yhm)\b", re.IGNORECASE)
+
+
+def prosody_features(wav: np.ndarray, sr: int, text: str) -> dict:
+    """Sygnaly prozodyczne dla LLM-a (kontrakt v0, bez ML): tempo mowy, pauzy,
+    glosnosc, wahania. Energetyczny pseudo-VAD: ramki 30 ms co 10 ms, prog wzgledem
+    p95 energii (-25 dB) z podloga absolutna -55 dBFS. Pauzy liczone TYLKO miedzy
+    pierwsza a ostatnia ramka mowy (cisza przed/po nagraniu to nie pauza).
+    Zwraca dict gotowy do JSON; wartosci zaokraglone (szum pomiarowy < precyzja)."""
+    wav = np.asarray(wav, dtype=np.float32)
+    dur_s = len(wav) / sr
+    frame, hop = int(0.030 * sr), int(0.010 * sr)
+    if len(wav) < frame:
+        return {"duration_s": round(dur_s, 2)}
+    n = 1 + (len(wav) - frame) // hop
+    idx = np.arange(n)[:, None] * hop + np.arange(frame)[None, :]
+    rms = np.sqrt(np.mean(wav[idx] ** 2, axis=1) + 1e-12)
+    db = 20 * np.log10(rms + 1e-12)
+    thr = max(np.percentile(db, 95) - 25.0, -55.0)
+    speech = db > thr
+    if not speech.any():
+        return {"duration_s": round(dur_s, 2), "speech_s": 0.0}
+    first, last = np.argmax(speech), len(speech) - 1 - np.argmax(speech[::-1])
+    span = speech[first: last + 1]
+    speech_s = float(span.sum()) * hop / sr
+    # pauzy: ciagi ciszy >= 0.18 s wewnatrz wypowiedzi
+    pauses = []
+    run = 0
+    for s in span:
+        if not s:
+            run += 1
+        else:
+            if run * hop / sr >= 0.18:
+                pauses.append(run * hop / sr)
+            run = 0
+    words = len(text.split())
+    return {
+        "duration_s": round(dur_s, 2),
+        "speech_s": round(speech_s, 2),
+        "words_per_s": round(words / speech_s, 2) if speech_s > 0 else 0.0,
+        "pauses": {
+            "count": len(pauses),
+            "total_s": round(sum(pauses), 2),
+            "longest_s": round(max(pauses), 2) if pauses else 0.0,
+        },
+        "loudness_dbfs": round(float(db[speech].mean()), 1),
+        "dyn_range_db": round(float(np.percentile(db[speech], 95) - np.percentile(db[speech], 5)), 1),
+        "hesitations": len(_FILLERS.findall(text)),
+    }
+
+
 _postproc = None  # PostProcessor budowany raz (laduje fixer), potem cache
 
 
@@ -188,4 +243,20 @@ def transcribe(samples: np.ndarray, sample_rate: int, checkpoint_path: str) -> s
     )
     # Postprocessing: fixer (korekcja + casing + interpunkcja) -> ITN.
     # Wlaczane przez ASR_DEMO_FIXER / ASR_DEMO_ITN (patrz postprocessing.py).
-    return _postprocess(text)
+    final = _postprocess(text)
+
+    # Affect v0 (OPCJONALNE, ASR_DEMO_AFFECT=1): zamiast golego tekstu zwroc JSON
+    # {text, text_raw, prosody} -- kontrakt metadanych dla LLM-a ("jak podejsc do
+    # uzytkownika"). Prozodia z audio (pseudo-VAD), wahania z SUROWEGO tekstu
+    # (postproc moglby je wyczyscic). Rust/PyO3 i tak przenosi string -> zero
+    # zmian w kodzie Rust; default (bez flagi) niezmieniony.
+    if os.environ.get("ASR_DEMO_AFFECT", "") not in ("", "0"):
+        mono = samples.mean(axis=1) if samples.ndim == 2 and samples.shape[1] > 1 else (
+            samples[:, 0] if samples.ndim == 2 else samples
+        )
+        prosody = prosody_features(mono, sample_rate, text)
+        print(f"[python] affect: {prosody}", flush=True)
+        return json.dumps(
+            {"text": final, "text_raw": text, "prosody": prosody}, ensure_ascii=False
+        )
+    return final
