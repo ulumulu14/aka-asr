@@ -94,6 +94,23 @@ mid dekoduje ~5 s audio w ~0.2 s). Wymuszenie GPU:
 ASR_DEMO_DEVICE=cuda ./target/release/aka_asr_demo_app
 ```
 
+## Affect v0 (opcjonalne): metadane prozodyczne dla LLM-a
+
+`ASR_DEMO_AFFECT=1` zmienia wyjście z gołego tekstu na JSON — kontrakt metadanych
+dla LLM-a konsumującego transkrypcję ("jak podejść do użytkownika"):
+
+```bash
+ASR_DEMO_AFFECT=1 ./target/release/aka_asr_demo_app --input-wav test.wav --no-save
+# {"text": "...", "text_raw": "...", "prosody": {"duration_s": 4.6, "speech_s": 0.81,
+#  "words_per_s": 1.23, "pauses": {"count": 1, "total_s": 0.21, "longest_s": 0.21},
+#  "loudness_dbfs": -47.1, "dyn_range_db": 12.3, "hesitations": 0}}
+```
+
+Prozodia liczona bez ML (pseudo-VAD energetyczny): tempo mowy, pauzy wewnątrz
+wypowiedzi, głośność/dynamika, wahania (`yyy`/`eee` z SUROWEGO tekstu, zanim
+postprocessing je wyczyści). Bez flagi wyjście bez zmian. Roadmapa v1: głowica
+walencja/pobudzenie na zamrożonym encoderze (pole `affect` obok `prosody`).
+
 ## Test bez mikrofonu
 
 Cały pipeline (Rust -> PyO3 -> checkpoint) można sprawdzić na istniejącym pliku:
