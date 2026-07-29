@@ -149,6 +149,11 @@ Licencja+zrodlo sa nieslione do manifestu (slad atrybucji). NIE redystrybuujemy
 audio -- wysylamy tylko wagi. Przed launchem: opinia prawnika IP.
 
 ```bash
+# 0. DISCOVERY kandydatow (Data API v3, YT_API_KEY z console.cloud.google.com):
+#    automat szuka+weryfikuje licencje CC, TY zatwierdzasz kanaly z rankingu
+#    (flaga CC = deklaracja uploadera -> reuploady odsiac ludzkim okiem!):
+YT_API_KEY=... python utils/yt_cc_scout.py --queries "podcast" "wywiad" --pages 2
+
 # 1a. YouTube CC-BY: pobierz TYLKO 'reuse allowed' + zapis metadanych (.info.json):
 yt-dlp --match-filter "license *= 'Creative Commons'" --write-info-json \
     -f bestaudio -x --audio-format m4a -o 'data/raw_yt/%(id)s.%(ext)s' <URL...>
