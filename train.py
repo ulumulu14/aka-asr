@@ -93,6 +93,11 @@ class TrainConfig:
     ctc_weight: float = 0.3
     # Label smoothing aux CTC: interpolacja z rozkladem jednostajnym (0.0 wylacza)
     ctc_label_smoothing: float = 0.0
+    # CTC-warmup: przez pierwsze N krokow trenuj TYLKO encoder+CTC (RNN-T w ogole
+    # nieliczony -> predictor/joint stoja na init). Encoder wchodzi w gre juz
+    # umiejac alignment -> plytszy start basenu blanku dla duzych modeli (giga:
+    # 3 runy stanely w blanku niezaleznie od bias/lr/warmup, big smigal). 0 = off.
+    ctc_warmup_steps: int = 0
     # Skip batchy ze spike loss_rnnt (> multiplier * mediana ostatnich) -- chroni
     # RNN-T przed zlymi aktualizacjami z problematycznych sampli (0.0 wylacza)
     loss_spike_multiplier: float = 0.0
@@ -620,23 +625,41 @@ def train(
                     target_lengths = batch["target_lengths"].to(device, non_blocking=True)
                     audio_padding_mask = batch["audio_padding_mask"].to(device, non_blocking=True)
 
-                    # Forward w AMP, loss liczony w fp32
-                    with torch.amp.autocast(
-                        device_type=device.type, dtype=amp_dtype, enabled=use_amp
-                    ):
-                        logits, enc_out = model(
-                            audio,
-                            labels,
-                            audio_padding_mask=audio_padding_mask,
-                            return_encoder_out=True,
+                    # Faza CTC-warmup: tylko encoder+CTC, RNN-T (predictor/joint/rnnt_loss)
+                    # w ogole nieliczony -- taniej i bez wciagania jointa w basen blanku
+                    ctc_phase = cfg.ctc_warmup_steps > 0 and global_step < cfg.ctc_warmup_steps
+                    if ctc_phase:
+                        with torch.amp.autocast(
+                            device_type=device.type, dtype=amp_dtype, enabled=use_amp
+                        ):
+                            raw_model = getattr(model, "_orig_mod", model)
+                            enc_out = raw_model.encoder(
+                                audio, key_padding_mask=audio_padding_mask
+                            )
+                        loss_rnnt = None
+                        loss = None  # zlozone nizej z samego CTC
+                    else:
+                        if cfg.ctc_warmup_steps > 0 and global_step == cfg.ctc_warmup_steps:
+                            logger.info(
+                                f"CTC-warmup zakonczony (krok {global_step}) -- wlaczam RNN-T"
+                            )
+                        # Forward w AMP, loss liczony w fp32
+                        with torch.amp.autocast(
+                            device_type=device.type, dtype=amp_dtype, enabled=use_amp
+                        ):
+                            logits, enc_out = model(
+                                audio,
+                                labels,
+                                audio_padding_mask=audio_padding_mask,
+                                return_encoder_out=True,
+                            )
+                        loss_rnnt = rnnt_loss(
+                            logits.float(), targets, logit_lengths, target_lengths, blank=0
                         )
-                    loss_rnnt = rnnt_loss(
-                        logits.float(), targets, logit_lengths, target_lengths, blank=0
-                    )
-                    loss = loss_rnnt
+                        loss = loss_rnnt
                     loss_ctc = None
 
-                    if cfg.ctc_weight > 0:
+                    if cfg.ctc_weight > 0 or ctc_phase:
                         raw_model = getattr(model, "_orig_mod", model)
                         ctc_log_probs = F.log_softmax(
                             raw_model.ctc_head(enc_out.float()), dim=-1
@@ -664,7 +687,8 @@ def train(
                             ).sum() / frame_mask.sum().clamp(min=1)
                             eps = cfg.ctc_label_smoothing
                             loss_ctc = (1 - eps) * loss_ctc + eps * ls_uniform
-                        loss = loss + cfg.ctc_weight * loss_ctc
+                        # w fazie warmup CTC jest jedyna strata (pelna waga)
+                        loss = loss_ctc if ctc_phase else loss + cfg.ctc_weight * loss_ctc
 
                     if not torch.isfinite(loss):
                         logger.warning(f"[krok {global_step}] loss={loss.item()} -- pomijam batch")
@@ -674,7 +698,7 @@ def train(
                     # Skip batchy ze spike loss_rnnt (problematyczne sample -> zla
                     # aktualizacja wybija model w blank). Mediana ostatnich kept jako
                     # odporny na outliery punkt odniesienia; aktywne po zebraniu >=100.
-                    if cfg.loss_spike_multiplier > 0:
+                    if cfg.loss_spike_multiplier > 0 and loss_rnnt is not None:
                         lr_val = loss_rnnt.item()
                         if (
                             len(rnnt_hist) >= 100
@@ -733,7 +757,8 @@ def train(
                         )
                         if writer is not None:
                             writer.add_scalar("train/loss", avg, global_step)
-                            writer.add_scalar("train/loss_rnnt", loss_rnnt.item(), global_step)
+                            if loss_rnnt is not None:  # None w fazie CTC-warmup
+                                writer.add_scalar("train/loss_rnnt", loss_rnnt.item(), global_step)
                             if loss_ctc is not None:
                                 writer.add_scalar("train/loss_ctc", loss_ctc.item(), global_step)
                             writer.add_scalar("train/lr", lr, global_step)
@@ -926,6 +951,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
         max_batch_duration=tr.get("max_batch_duration"),
         ctc_weight=float(tr.get("ctc_weight", 0.3)),
         ctc_label_smoothing=float(tr.get("ctc_label_smoothing", 0.0)),
+        ctc_warmup_steps=int(tr.get("ctc_warmup_steps", 0)),
         loss_spike_multiplier=float(tr.get("loss_spike_multiplier", 0.0)),
         use_amp=bool(tr.get("use_amp", True)),
         amp_dtype=str(tr.get("amp_dtype", "bf16")),

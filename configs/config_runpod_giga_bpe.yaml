@@ -65,6 +65,13 @@ training:
   amp_dtype: bf16
   ctc_weight: 0.3
   ctc_label_smoothing: 0.05
+  ctc_warmup_steps: 12000        # REMEDIUM blank-stall gigi (3 runy stanely; big smigal
+                                 # na tych samych danych/profilu => wina architektury):
+                                 # ~1,3 epoki tylko encoder+CTC (RNN-T nieliczony),
+                                 # potem joint startuje na wyuczonym alignmencie.
+                                 # UWAGA: epoki fazy CTC maja val_WER ~100% (joint na
+                                 # init) i licza sie do guarda (8) -- zostaje ~6,5
+                                 # epoki na ucieczke po wlaczeniu RNN-T.
   loss_spike_multiplier: 3.0     # skip batcha przy spike loss_rnnt (jak big)
   collapse_abort_epochs: 8       # giga: wolniejsza dynamika (2,4x param, nizszy peak,
                                  # dluzszy warmup) -> ucieczka z blanku moze przyjsc
