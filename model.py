@@ -43,7 +43,7 @@ MODEL_SIZES = {
     ),
     # Preset wiekszy niz big (~319M): nastepny krok drabinki skalowania.
     # enc_dim musi dzielic sie przez enc_heads (tu 768/12=64 na glowe).
-    "giga": dict(
+    "gigant": dict(
         enc_layers=20,
         enc_dim=768,
         enc_heads=12,

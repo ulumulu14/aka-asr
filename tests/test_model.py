@@ -20,10 +20,10 @@ def _n_params(size, override=None):
     return sum(p.numel() for p in m.parameters())
 
 
-def test_sizes_ordered_smol_mid_big_giga():
-    # kazdy kolejny rozmiar wiekszy; giga to preset > big
-    n = {s: _n_params(s) for s in ("smol", "mid", "big", "giga")}
-    assert n["smol"] < n["mid"] < n["big"] < n["giga"]
+def test_sizes_ordered_smol_mid_big_gigant():
+    # kazdy kolejny rozmiar wiekszy; gigant to preset > big
+    n = {s: _n_params(s) for s in ("smol", "mid", "big", "gigant")}
+    assert n["smol"] < n["mid"] < n["big"] < n["gigant"]
 
 
 def test_custom_base_equals_big():
