@@ -51,6 +51,7 @@ def to_spoken_pl(text: str) -> str:
     text = re.sub(r"\bpkt\b\.?", "punkt", text)
     text = re.sub(r"\bpoz\.", "pozycja", text)
     text = re.sub(r"\bbr\.", "bieżącego roku", text)
+    text = re.sub(r"\br\.(?!\w)", "roku", text)  # "2025 r." -> "... roku"
     text = re.sub(r"\btj\.", "to jest", text)
     # 2. daty: dzien + miesiac -> dopelniacz porzadkowy
     text = re.sub(

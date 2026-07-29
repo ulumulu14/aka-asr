@@ -34,6 +34,10 @@ def test_kropka_zdania_to_nie_porzadkowy():
     assert "." in out  # kropka zdania zachowana
 
 
+def test_rok_skrot():
+    assert to_spoken_pl("w 2025 r. przyjęto") == "w dwa tysiące dwadzieścia pięć roku przyjęto"
+
+
 def test_bez_cyfr_bez_zmian():
     assert to_spoken_pl("zwykły tekst bez liczb") == "zwykły tekst bez liczb"
 

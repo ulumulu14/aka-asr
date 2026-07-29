@@ -4,6 +4,7 @@ Whisper<->stenogram (align_segment). Czyste funkcje, bez API/audio/GPU."""
 from utils.datasets_conversion.sejm2json import (
     align_segment,
     norm_words,
+    strip_committee_html,
     strip_statement_html,
     tokenize_steno,
     word_wer,
@@ -80,6 +81,19 @@ def test_align_monotoniczny_postep():
     assert r1["orig"][0] == "alfa"
     assert r2["orig"][0] == "epsilon"
     assert c2 > c1
+
+
+def test_strip_committee_html():
+    # realna struktura zapisu komisji: naglowek z boldami BEZ dwukropka (obecnosc),
+    # potem wypowiedzi <p><b>Mowca (Partia):</b><br>tekst
+    raw = ("<html><body>Porzadek: <b>– pierwsze czytanie</b> ustawy."
+           "W posiedzeniu udzial wzieli: <b>Jan Kowalski</b>&nbsp;minister."
+           "<p><b>Przewodnicząca poseł Anna Nowak (KO):</b><br>"
+           "Dzień dobry państwu. (Gwar na sali) Otwieram posiedzenie."
+           "<p><b>Poseł Jan Kowalski (PiS):</b><br>Mam pytanie do ministra.</body></html>")
+    out = strip_committee_html(raw)
+    assert out == "Dzień dobry państwu. Otwieram posiedzenie. Mam pytanie do ministra."
+    assert "Nowak" not in out and "czytanie" not in out and "Gwar" not in out
 
 
 def test_seg_index_przywraca_kolejnosc_czasowa():

@@ -227,3 +227,30 @@ python utils/datasets_conversion/hf2json.py pelcra --splits validation
 python test.py --checkpoint <best_lub_avg.pt> --manifest data/val_manifest_pelcra.jsonl
 # test.py rozbija per-subset (pelcra:spokes_biz_luz itd.)
 ```
+
+---
+
+## FAZA 2d: KOMISJE sejmowe -- semi-spontaniczna z ground-truth (najlepszy stosunek)
+
+40 komisji x ~100+ posiedzen x 1-3 h = tysiace godzin DYSKUSJI (przerywanie,
+pytania, odpowiedzi z glowy -- nie deklamacja) z ludzkim stenogramem. Tier 1.
+Pilot (ASW/100, 8 min): 33/35 zachowane, WER(whisper,stenogram)=0.062 -- jakosc
+identyczna z plenarnymi.
+
+```bash
+# 1. wybor: lista komisji / posiedzen z linkami audio (m3u8):
+python utils/datasets_conversion/sejm2json.py komisje                # lista komisji
+python utils/datasets_conversion/sejm2json.py komisje --code ASW     # posiedzenia + m3u8
+
+# 2. stenogram + audio jednego posiedzenia:
+python utils/datasets_conversion/sejm2json.py fetch-komisja --code ASW --num 100 \
+    --out data/sejm/steno_ASW_100.txt
+ffmpeg -i "<m3u8 z listingu>" -vn -ac 1 -ar 16000 data/sejm/raw/ASW_100.wav
+
+# 3-4. jak FAZA 2c: longform2json (VAD) -> pseudo_whisper --keep-digits (kotwica)
+#      -> sejm2json align (ground-truth ze stenogramu + cyfry->slowa)
+```
+
+Masowka: petla po (code, num, m3u8) z listingu; wznawialnosc per plik (done_sources
+longform2json + resume pseudo_whisper). Limitowac udzial domeny w miksie tak samo
+jak plenarne (formalno-urzedowa, choc zywsza).
