@@ -41,7 +41,10 @@ augment:
 model:
   size: giga
   dropout: 0.1
-  blank_bias_init: -4.0          # anty blank-dominacja BPE, jak w big (tylko swiezy run)
+  blank_bias_init: -6.0          # giga: -4 (kalibracja big) NIE wystarczyl -- run 03-21-20
+                                 # stal w blanku 4 epoki (ctc zdrowy 5.5, rnnt med 140
+                                 # spike 324/grad 715, val_loss wyplaszczony, greedy pusty);
+                                 # wiekszy joint 768 = silniejszy atraktor blanku -> -6
 
 training:
   epochs: 40
