@@ -38,6 +38,11 @@ import urllib.request
 from pathlib import Path
 
 API = "https://api.sejm.gov.pl/sejm/term{term}/proceedings/{num}/{date}/transcripts"
+API_KOM = "https://api.sejm.gov.pl/sejm/term{term}/committees"
+# mowca w zapisie komisji: <p><b>Przewodniczaca posel X (KO):</b><br>tekst...
+# (boldy BEZ dwukropka to lista obecnosci w naglowku -- nie ruszamy ich regexem,
+# tylko ucinamy caly naglowek do pierwszego mowcy)
+_KOM_SPEAKER = re.compile(r"<b>[^<]{3,160}:\s*</b>", re.DOTALL)
 _PUNCT = re.compile(r"[^\w\s]", re.UNICODE)
 _PARENS = re.compile(r"\([^)]*\)")  # didaskalia stenogramu: (Oklaski), (Gwar na sali)
 _HEAD = re.compile(r".*?<body[^>]*>", re.DOTALL)   # head+title (naglowki dokumentu)
@@ -124,12 +129,27 @@ def _seg_index(path: str) -> tuple:
     return (re.sub(r"_\d+\.wav$", "", path), int(m.group(1)) if m else 0)
 
 
+def strip_committee_html(raw: str) -> str:
+    """Pelny zapis posiedzenia KOMISJI (jeden HTML na posiedzenie) -> czysty tekst
+    wypowiedziany: ucina naglowek (porzadek+obecnosc) do PIERWSZEGO mowcy, usuwa
+    znaczniki mowcow (<b>...:</b>), didaskalia w nawiasach i tagi."""
+    m = _KOM_SPEAKER.search(raw)
+    if m:
+        raw = raw[m.start():]
+    raw = _KOM_SPEAKER.sub(" ", raw)
+    raw = _TAG.sub(" ", raw)
+    raw = html.unescape(raw)
+    raw = _PARENS.sub(" ", raw)
+    return re.sub(r"\s+", " ", raw).strip()
+
+
 # ------------------------------------------------------------------ fetch
 
-def _get(url: str, retries: int = 3) -> str:
+def _get(url: str, retries: int = 3, accept: str | None = None) -> str:
     for i in range(retries):
         try:
-            with urllib.request.urlopen(url, timeout=30) as r:
+            req = urllib.request.Request(url, headers={"Accept": accept} if accept else {})
+            with urllib.request.urlopen(req, timeout=30) as r:
                 return r.read().decode("utf-8")
         except (urllib.error.URLError, TimeoutError) as e:
             if i == retries - 1:
@@ -162,6 +182,32 @@ def cmd_fetch(args: argparse.Namespace) -> None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(full, encoding="utf-8")
     print(f"[OK] {len(parts)} wypowiedzi, {len(full.split())} slow -> {args.out}")
+
+
+def cmd_komisje(args: argparse.Namespace) -> None:
+    """Listing: bez --code lista komisji; z --code posiedzenia (num/data/audio m3u8)."""
+    base = API_KOM.format(term=args.term)
+    if not args.code:
+        for c in json.loads(_get(base)):
+            print(f"{c.get('code'):6} {c.get('name', '')[:70]}")
+        return
+    sittings = json.loads(_get(f"{base}/{args.code}/sittings"))
+    print(f"# {args.code}: {len(sittings)} posiedzen (audio: ffmpeg -i <m3u8> -vn -ac 1 -ar 16000 out.wav)")
+    for s in sittings:
+        vids = s.get("video") or []
+        link = (vids[0].get("videoLink") or "") if vids else ""
+        print(f"{s.get('num'):>4}  {s.get('date')}  {'zamkniete' if s.get('closed') else 'otwarte '}"
+              f"  {link[:110]}")
+
+
+def cmd_fetch_komisja(args: argparse.Namespace) -> None:
+    """Stenogram POSIEDZENIA KOMISJI (ludzki zapis) -> czysty tekst do align."""
+    url = f"{API_KOM.format(term=args.term)}/{args.code}/sittings/{args.num}/html"
+    raw = _get(url, accept="text/html")
+    txt = strip_committee_html(raw)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(txt, encoding="utf-8")
+    print(f"[OK] komisja {args.code} pos. {args.num}: {len(txt.split())} slow -> {args.out}")
 
 
 # ------------------------------------------------------------------ align
@@ -234,6 +280,18 @@ def main() -> None:
     pf.add_argument("--workers", type=int, default=16, help="rownolegle pobieranie wypowiedzi")
     pf.add_argument("--max-statements", type=int, default=None, help="limit wypowiedzi (pilot)")
     pf.set_defaults(fn=cmd_fetch)
+
+    pk = sub.add_parser("komisje", help="lista komisji / posiedzen (z linkami audio m3u8)")
+    pk.add_argument("--term", type=int, default=10)
+    pk.add_argument("--code", default=None, help="np. ASW; bez -> lista komisji")
+    pk.set_defaults(fn=cmd_komisje)
+
+    pfk = sub.add_parser("fetch-komisja", help="stenogram posiedzenia komisji -> tekst do align")
+    pfk.add_argument("--term", type=int, default=10)
+    pfk.add_argument("--code", required=True, help="kod komisji, np. ASW")
+    pfk.add_argument("--num", type=int, required=True, help="numer posiedzenia")
+    pfk.add_argument("--out", type=Path, required=True)
+    pfk.set_defaults(fn=cmd_fetch_komisja)
 
     pa = sub.add_parser("align", help="agreement stenogram <-> hipotezy Whispera")
     pa.add_argument("--whisper", type=Path, required=True, help="manifest z pseudo_whisper.py")
