@@ -179,6 +179,42 @@ def prosody_features(wav: np.ndarray, sr: int, text: str) -> dict:
     }
 
 
+_affect_head = None  # (head, enc_dim) ladowane raz z ASR_DEMO_AFFECT_HEAD
+
+
+def _affect_va(model, feats_t: torch.Tensor, logit_lengths: torch.Tensor) -> dict | None:
+    """Affect v1 (opcjonalne): glowica V/A na encoderze ASR. ASR_DEMO_AFFECT_HEAD=
+    <sciezka .pt z affect/train_head.py>. Zwraca {"valence","arousal","confidence"}
+    albo None (brak/blad -> cicho pomijamy: zla etykieta gorsza niz zadna).
+    confidence = val mean CCC glowicy (stala kalibracja v1, nie per-sample)."""
+    global _affect_head
+    path = os.environ.get("ASR_DEMO_AFFECT_HEAD") or ""
+    if not path:
+        return None
+    try:
+        if _affect_head is None:
+            from affect.head import AffectHead
+
+            st = torch.load(path, map_location="cpu", weights_only=False)
+            head = AffectHead(st["enc_dim"])
+            head.load_state_dict(st["head"])
+            head.to(DEVICE).eval()
+            conf = round(0.5 * (st.get("val_ccc_v", 0) + st.get("val_ccc_a", 0)), 2)
+            _affect_head = (head, conf)
+            print(f"[python] affect head: {path} (val CCC~{conf}, "
+                  f"licencja: {st.get('data_license', '?')})", flush=True)
+        head, conf = _affect_head
+        Ts = int(logit_lengths[0])
+        with torch.inference_mode():
+            enc = model.encoder(feats_t)  # (1, T', D); pojedynczy sample -> bez maski
+            va = head(enc[:, :Ts])
+        return {"valence": round(float(va[0, 0]), 2),
+                "arousal": round(float(va[0, 1]), 2), "confidence": conf}
+    except Exception as e:  # affect nie moze ubic transkrypcji
+        print(f"[python] affect head pominiety ({type(e).__name__}: {e})", flush=True)
+        return None
+
+
 _postproc = None  # PostProcessor budowany raz (laduje fixer), potem cache
 
 
@@ -256,7 +292,9 @@ def transcribe(samples: np.ndarray, sample_rate: int, checkpoint_path: str) -> s
         )
         prosody = prosody_features(mono, sample_rate, text)
         print(f"[python] affect: {prosody}", flush=True)
-        return json.dumps(
-            {"text": final, "text_raw": text, "prosody": prosody}, ensure_ascii=False
-        )
+        out = {"text": final, "text_raw": text, "prosody": prosody}
+        va = _affect_va(model, feats_t, logit_lengths)  # v1: glowica V/A (opcjonalna)
+        if va is not None:
+            out["affect"] = va
+        return json.dumps(out, ensure_ascii=False)
     return final
