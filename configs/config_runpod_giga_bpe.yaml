@@ -62,7 +62,10 @@ training:
   ctc_weight: 0.3
   ctc_label_smoothing: 0.05
   loss_spike_multiplier: 3.0     # skip batcha przy spike loss_rnnt (jak big)
-  collapse_abort_epochs: 5       # guard anty blank-collapse (jak big)
+  collapse_abort_epochs: 8       # giga: wolniejsza dynamika (2,4x param, nizszy peak,
+                                 # dluzszy warmup) -> ucieczka z blanku moze przyjsc
+                                 # pozniej niz u biga (ep1-3); epoka ~35 min = tania
+                                 # cierpliwosc. Przy abort: RESUME=last.pt kontynuuje.
   log_every: 50
   eval_every_epochs: 1
   save_every_steps: 1000
