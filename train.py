@@ -95,7 +95,7 @@ class TrainConfig:
     ctc_label_smoothing: float = 0.0
     # CTC-warmup: przez pierwsze N krokow trenuj TYLKO encoder+CTC (RNN-T w ogole
     # nieliczony -> predictor/joint stoja na init). Encoder wchodzi w gre juz
-    # umiejac alignment -> plytszy start basenu blanku dla duzych modeli (giga:
+    # umiejac alignment -> plytszy start basenu blanku dla duzych modeli (gigant:
     # 3 runy stanely w blanku niezaleznie od bias/lr/warmup, big smigal). 0 = off.
     ctc_warmup_steps: int = 0
     # Skip batchy ze spike loss_rnnt (> multiplier * mediana ostatnich) -- chroni
@@ -1092,7 +1092,7 @@ def main(config_path: str, model_size: str | None, device_str: str, resume_path:
     if model_size == "custom" and not dims_override and not resume_path:
         raise click.ClickException(
             "model.size=custom wymaga model.dims w configu (baza=big, nadpisz "
-            "dowolne pola); gotowy preset wiekszy niz big to model.size=giga"
+            "dowolne pola); gotowy preset wiekszy niz big to model.size=gigant"
         )
     if dims_override:
         unknown = set(dims_override) - set(model_cfg)

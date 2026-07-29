@@ -1,12 +1,12 @@
-# Trening na RunPodzie: giga (~319M param), pelny miks + augmentacja, tokenizer BPE.
-# Wariant config_runpod_big_bpe.yaml przeskalowany na model.size=giga (enc 768/20).
+# Trening na RunPodzie: gigant (~319M param), pelny miks + augmentacja, tokenizer BPE.
+# Wariant config_runpod_big_bpe.yaml przeskalowany na model.size=gigant (enc 768/20).
 #
 #   cd /workspace/aka-asr
-#   python train.py configs/config_runpod_giga_bpe.yaml
-#   python train.py configs/config_runpod_giga_bpe.yaml --resume /workspace/aka-asr/checkpoints/conformer_giga/<exp>/last.pt
+#   python train.py configs/config_runpod_gigant_bpe.yaml
+#   python train.py configs/config_runpod_gigant_bpe.yaml --resume /workspace/aka-asr/checkpoints/conformer_giga/<exp>/last.pt
 #
-# WYMAGA rozmiaru `giga` w MODEL_SIZES (model.py) -- git pull po commicie rename
-# custom->giga. Reszta wymagan jak big_bpe (bpe_pl.model w repo, dane: runpod/README.md).
+# WYMAGA rozmiaru `gigant` w MODEL_SIZES (model.py) -- git pull po commicie rename
+# custom->giga->gigant. Reszta wymagan jak big_bpe (bpe_pl.model w repo, dane: runpod/README.md).
 #
 # KALIBRACJA vs big (jedyne 3 zmiany, reszta = zwalidowany przepis cosine big):
 #   lr 2.5e-4 -> 2e-4        skala ~1/sqrt(width) 512->768; wiekszy model = wrazliwszy
@@ -39,7 +39,7 @@ augment:
   copies: 1
 
 model:
-  size: giga
+  size: gigant
   dropout: 0.1
   blank_bias_init: -4.0          # -6 SFALSYFIKOWANE (run 06-11-21: krzywa identyczna z -4,
                                  # oba plateau val_loss ~115) -> wracamy do -4 jak big
@@ -47,7 +47,7 @@ model:
 training:
   epochs: 40
   batch_size: 128                # cap na krotkich klipach; budzet ponizej wiaze pierwszy
-  max_batch_duration: 300.0      # 450 biga * ~1/1.5 (wzrost aktywacji giga); przy OOM
+  max_batch_duration: 300.0      # 450 biga * ~1/1.5 (wzrost aktywacji gigant); przy OOM
                                  # zbic do 250, przy VRAM <70% mozna podniesc do 350
   n_workers: 12
   lr: 0.00025                    # proba 3: PELNY znany-dobry profil optymalizatora biga
@@ -73,7 +73,7 @@ training:
                                  # init) i licza sie do guarda (8) -- zostaje ~6,5
                                  # epoki na ucieczke po wlaczeniu RNN-T.
   loss_spike_multiplier: 3.0     # skip batcha przy spike loss_rnnt (jak big)
-  collapse_abort_epochs: 8       # giga: wolniejsza dynamika (2,4x param, nizszy peak,
+  collapse_abort_epochs: 8       # gigant: wolniejsza dynamika (2,4x param, nizszy peak,
                                  # dluzszy warmup) -> ucieczka z blanku moze przyjsc
                                  # pozniej niz u biga (ep1-3); epoka ~35 min = tania
                                  # cierpliwosc. Przy abort: RESUME=last.pt kontynuuje.
