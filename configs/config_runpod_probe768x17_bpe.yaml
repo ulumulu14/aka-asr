@@ -1,0 +1,81 @@
+# SONDA STRUKTURALNA 768x17 (~280M): rozstrzyga glebokosc-vs-szerokosc po 4
+# falsyfikacjach gigant-768x20 (bias/optymalizator/dane/CTC-warmup -- wszystko
+# stalo w blanku; big 512x17 smigal na tych samych danych i profilu).
+# JEDNA zmienna vs proba 3: enc_layers 20->17 (glebokosc biga, szerokosc giganta).
+# Bez CTC-warmupu (sfalsyfikowany jako remedium). Profil optymalizatora = proba 3.
+#
+#   cd /workspace/aka-asr && git pull
+#   export HF_TOKEN=...
+#   CONFIG=configs/config_runpod_probe768x17_bpe.yaml bash runpod/train.sh
+#
+# Werdykt: ep1-3 val_loss nurkuje <<115 = glebokosc byla zabojca; plasko = szerokosc.
+data:
+  train_manifest_path: /workspace/aka-asr/data/train_manifest_all.jsonl
+  val_manifest_path: /workspace/aka-asr/data/val_manifest_all.jsonl
+  max_audio_len: 20.0
+  min_audio_len: 0.5
+  feature_cache_dir: /workspace/aka-asr/data/features_cache
+  bad_list_path: /workspace/aka-asr/data/bad_audio.txt
+  max_token_frame_ratio: 0.5     # filtr U>T' -- patrz big_bpe (byla przyczyna collapse)
+
+tokenizer:
+  type: bpe
+  bpe_model_path: bpe_pl.model
+
+augment:
+  noise_dir: /workspace/aka-asr/data/RIRS_NOISES/pointsource_noises
+  rir_dir: /workspace/aka-asr/data/RIRS_NOISES/simulated_rirs
+  noise_prob: 0.5
+  rir_prob: 0.5
+  snr_db: [5, 25]
+  speed_perturb: [0.9, 1.0, 1.1]
+  copies: 1
+
+model:
+  size: custom
+  dims: {enc_layers: 17, enc_dim: 768, enc_heads: 12, enc_kernel: 31,
+         pred_layers: 2, pred_dim: 768, pred_heads: 8, pred_kernel: 15,
+         joint_dim: 768}
+  dropout: 0.1
+  blank_bias_init: -4.0          # -6 SFALSYFIKOWANE (run 06-11-21: krzywa identyczna z -4,
+                                 # oba plateau val_loss ~115) -> wracamy do -4 jak big
+
+training:
+  epochs: 40
+  batch_size: 128                # cap na krotkich klipach; budzet ponizej wiaze pierwszy
+  max_batch_duration: 300.0      # 450 biga * ~1/1.5 (wzrost aktywacji gigant); przy OOM
+                                 # zbic do 250, przy VRAM <70% mozna podniesc do 350
+  n_workers: 12
+  lr: 0.00025                    # proba 3: PELNY znany-dobry profil optymalizatora biga
+                                 # (2,5e-4 + warmup 4000). Moje skalowanie w dol (2e-4/6000)
+                                 # najpewniej zdusilo ucieczke z blanku: dwa runy (bias -4/-6)
+                                 # plateau val_loss ~115 przy SPOKOJNYM gradzie (32) = zapas
+                                 # stabilnosci jest. Jesli i to stanie -> winne dane (granary,
+                                 # dluzsze segmenty = glebszy basen blanku) -> test big@granary
+  weight_decay: 0.000001
+  warmup_steps: 4000
+  lr_schedule: cosine
+  min_lr_ratio: 0.1              # floor = 2e-5
+  grad_clip: 1.0
+  accum_grad: 1
+  amp_dtype: bf16
+  ctc_weight: 0.3
+  ctc_label_smoothing: 0.05
+  loss_spike_multiplier: 3.0     # skip batcha przy spike loss_rnnt (jak big)
+  collapse_abort_epochs: 8       # gigant: wolniejsza dynamika (2,4x param, nizszy peak,
+                                 # dluzszy warmup) -> ucieczka z blanku moze przyjsc
+                                 # pozniej niz u biga (ep1-3); epoka ~35 min = tania
+                                 # cierpliwosc. Przy abort: RESUME=last.pt kontynuuje.
+  log_every: 50
+  eval_every_epochs: 1
+  save_every_steps: 1000
+  keep_last: 3
+  wer_max_samples: 500
+  wer_random_subset: true
+  max_symbols_per_step: 3
+  compile: false
+  tensorboard: true
+  hf_repo: aka-asr-v1
+  hf_private: true
+  ckpt_root: /workspace/aka-asr/checkpoints
+  seed: 42
